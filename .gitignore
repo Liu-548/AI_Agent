@@ -1,0 +1,41 @@
+# --- Bí mật: KHÔNG BAO GIỜ commit ---
+.env
+.env.*
+!.env.example
+*.key
+
+# --- Model weights: YOLO tự tải về, nặng 5–109MB, GitHub chặn file >100MB ---
+*.pt
+*.pth
+*.onnx
+*.engine
+runs/
+
+# --- Ảnh demo dung lượng lớn (chỉ commit ảnh nhỏ trong assets/) ---
+assets/tmp/
+*.mp4
+
+# --- Notebook: diff không đọc được, merge conflict là không thể giải ---
+# Chuyển code từ notebook sang .py rồi mới commit. Nếu bắt buộc phải commit
+# notebook thì clear all outputs trước (Kernel -> Restart & Clear Output).
+*.ipynb_checkpoints/
+.ipynb_checkpoints/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

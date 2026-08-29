@@ -14,7 +14,8 @@ from app.agents.research_agent.prompts import RESEARCH_AGENT_PROMPT
 AGENT_NAME = "research_agent"
 AGENT_DESCRIPTION = (
     "Use for research-related tasks: finding scientific papers on arXiv and looking up "
-    "concepts/definitions on Wikipedia. Cannot see images."
+    "concepts/definitions on Wikipedia. Cannot see images. Always reports back in "
+    "Vietnamese, as a short TOM TAT / CHI TIET / NGUON summary with numbered citations."
 )
 
 

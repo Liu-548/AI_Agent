@@ -6,7 +6,13 @@ phần kiểm tra được viết thành hàm thuần thay vì nhét vào prompt
 
 from __future__ import annotations
 
-from app.core.grounding import bao_cao, kiem_tra_grounding, ma_arxiv_trong, tach_cau
+from app.core.grounding import (
+    bao_cao,
+    kiem_tra_grounding,
+    ma_arxiv_trong,
+    tach_cau,
+    tach_danh_sach_nguon,
+)
 
 TOOL_ARXIV = """Entry ID: http://arxiv.org/abs/2104.09864v5
 Published: 2021-04-20
@@ -109,3 +115,84 @@ def test_bao_cao_khong_doa_ma_bia_khi_chi_thieu_nguon():
     ra = bao_cao(["THIEU_NGUON: mot cau nao do"])
     assert "MA_BIA" not in ra
     assert "nhãn" in ra.lower()
+
+
+# --------------------------------------------------------------------------- #
+# Định dạng mới: tiếng Việt + trích dẫn số + danh sách NGUỒN cuối bài
+# --------------------------------------------------------------------------- #
+TRA_LOI_MOI = """TÓM TẮT
+RoPE mã hoá vị trí bằng phép quay vector query và key [1].
+
+CHI TIẾT
+- Kết hợp vị trí tuyệt đối và tương đối trong cùng một cơ chế [1]
+- Transformer đưa thông tin vị trí vào bằng positional encoding [2]
+
+NGUỒN
+[1] RoFormer: Enhanced Transformer with Rotary Position Embedding (2021)
+    - http://arxiv.org/abs/2104.09864v5
+[2] wikipedia: Transformer (deep learning)
+"""
+
+
+def test_dinh_dang_moi_khong_vi_pham():
+    """Trích dẫn số + danh sách nguồn cuối bài phải được coi là hợp lệ.
+
+    Đây là ca quan trọng nhất: đổi prompt sang định dạng số mà quên nâng cấp bộ
+    kiểm tra thì nó báo động giả TOÀN BỘ, và người dùng sẽ tắt nó đi.
+    """
+    assert kiem_tra_grounding(TRA_LOI_MOI, [TOOL_ARXIV, TOOL_WIKI]) == []
+
+
+def test_bat_duoc_trich_dan_khong_co_trong_muc_nguon():
+    tra_loi = TRA_LOI_MOI.replace(
+        "- Transformer đưa thông tin vị trí vào bằng positional encoding [2]",
+        "- Transformer đưa thông tin vị trí vào bằng positional encoding [7]",
+    )
+    vi_pham = kiem_tra_grounding(tra_loi, [TOOL_ARXIV, TOOL_WIKI])
+    assert any(v.startswith("NGUON_THIEU") and "[7]" in v for v in vi_pham)
+
+
+def test_bat_duoc_ma_arxiv_bia_nam_trong_muc_nguon():
+    """Mã bịa giờ nằm ở cuối bài chứ không còn cuối câu — vẫn phải bắt được."""
+    tra_loi = TRA_LOI_MOI.replace("2104.09864v5", "2305.13052v1")
+    vi_pham = kiem_tra_grounding(tra_loi, [TOOL_ARXIV, TOOL_WIKI])
+    assert any(v.startswith("MA_BIA") and "2305.13052" in v for v in vi_pham)
+
+
+def test_bat_duoc_trang_wikipedia_bia_trong_muc_nguon():
+    tra_loi = TRA_LOI_MOI.replace(
+        "[2] wikipedia: Transformer (deep learning)",
+        "[2] wikipedia: Rotary position embedding",
+    )
+    vi_pham = kiem_tra_grounding(tra_loi, [TOOL_ARXIV, TOOL_WIKI])
+    assert any(v.startswith("NGUON_BIA") and "[2]" in v for v in vi_pham)
+
+
+def test_cau_tieng_viet_khong_gan_trich_dan_van_bi_bat():
+    tra_loi = TRA_LOI_MOI.replace(
+        "CHI TIẾT\n",
+        "CHI TIẾT\n- RoPE hiện được dùng trong GPT-4 và nhiều mô hình ngôn ngữ lớn khác\n",
+    )
+    vi_pham = kiem_tra_grounding(tra_loi, [TOOL_ARXIV, TOOL_WIKI])
+    assert any(v.startswith("THIEU_NGUON") and "GPT-4" in v for v in vi_pham)
+
+
+def test_tieu_de_muc_khong_bi_coi_la_cau_thieu_nguon():
+    """TÓM TẮT / CHI TIẾT / NGUỒN là tiêu đề mục, không phải câu khẳng định."""
+    vi_pham = kiem_tra_grounding(TRA_LOI_MOI, [TOOL_ARXIV, TOOL_WIKI])
+    assert not any("TÓM TẮT" in v or "CHI TIẾT" in v for v in vi_pham)
+
+
+def test_tach_danh_sach_nguon():
+    than, nguon = tach_danh_sach_nguon(TRA_LOI_MOI)
+    assert "NGUỒN" not in than
+    assert set(nguon) == {"1", "2"}
+    # Dòng URL bị thụt lề phải được dán vào mục [1] phía trên, không thành mục riêng.
+    assert "arxiv.org/abs/2104.09864v5" in nguon["1"]
+    assert nguon["2"] == "wikipedia: Transformer (deep learning)"
+
+
+def test_khong_co_muc_nguon_thi_giu_nguyen_dinh_dang_cu():
+    than, nguon = tach_danh_sach_nguon("Mot cau [http://arxiv.org/abs/2104.09864v5].")
+    assert nguon == {}
+    assert than.startswith("Mot cau")

@@ -91,6 +91,127 @@ pip install ultralytics==8.3.108
 
 Hai người còn lại **không cần** cài — tool YOLO import trễ nên toàn bộ test vẫn chạy.
 
+## Chạy chương trình
+
+Trên Windows dùng `chay.ps1` ở gốc repo. Nó tự kích hoạt venv và bật UTF-8 cho
+console trước khi gọi Python, nên bỏ được hai bước hay quên nhất:
+
+```powershell
+# TRƯỚC — ba bước, quên bước giữa là sinh ra bốn loại lỗi khác nhau
+cd C:\CTK47C\DoAnChuyenNganh\visual-agentic-ai
+.\.venv\Scripts\Activate.ps1
+python -m app.main --agent research_agent "rotary positional encoding"
+
+# GIỜ — một bước
+.\chay.ps1 -r "rotary positional encoding"
+```
+
+Script gọi thẳng `.venv\Scripts\python.exe` chứ không dot-source `Activate.ps1`,
+nên không phụ thuộc ExecutionPolicy và không thể chạy nhầm Python hệ thống. Đổi
+lại dấu nhắc lệnh sẽ **không** hiện `(.venv)` — không sao.
+
+Trên macOS/Linux chưa có script tương đương; dùng thẳng `python -m app.main ...`
+sau khi `source .venv/bin/activate`.
+
+### Bảng lệnh
+
+| Lệnh | Việc | Lượt LLM |
+|---|---|---|
+| `.\chay.ps1 "câu hỏi"` | qua supervisor, tự chọn agent | ~5–6 Groq |
+| `.\chay.ps1 -r "câu hỏi"` | chạy thẳng `research_agent` | ~4 Groq |
+| `.\chay.ps1 -v "câu hỏi + đường dẫn ảnh"` | chạy thẳng `vision_agent` | ~2 Gemini |
+| `.\chay.ps1 -Agent <tên> "câu hỏi"` | agent bất kỳ trong registry | tuỳ agent |
+| `.\chay.ps1 -Test` | `pytest -m "not network"` | **0** |
+| `.\chay.ps1 -Config` | 5 vai trò / 5 model / tình trạng 2 key | **0** |
+| `.\chay.ps1 -Models` | model mà key của bạn thật sự dùng được | **0** |
+| `.\chay.ps1 -Graph` | in state graph dạng mermaid | **0** |
+
+Thêm `-Quiet` vào lệnh bất kỳ để chỉ in câu trả lời cuối, bỏ phần log trace.
+
+`-Agent` nhận tên bất kỳ trong registry, nên thêm agent thứ 4 **không phải sửa
+script này** — đúng tinh thần quy tắc IF-09.
+
+Gõ `.\chay.ps1` không kèm gì thì nó in hướng dẫn rồi thoát, không chạy gì cả.
+
+### Các trường hợp sử dụng
+
+Bốn lệnh đầu **không tốn lượt API nào** — luôn chạy chúng trước khi gọi thật:
+
+```powershell
+.\chay.ps1 -Config      # 5 vai trò phải ra 5 model khác nhau, 2 key phải có, .env phải "đã nạp"
+.\chay.ps1 -Models      # mọi tên model trong -Config phải có mặt trong danh sách này
+.\chay.ps1 -Test        # phải xanh 100%
+.\chay.ps1 -Graph       # state graph phải đủ node
+```
+
+Năm ca nghiệm thu theo tài liệu gốc, xếp từ rẻ đến đắt:
+
+```powershell
+# Ca 1 — Research thuần (chỉ tốn Groq, rẻ nhất, chạy ca này khi đang sửa code)
+.\chay.ps1 -r "rotary positional encoding"
+
+# Ca 4 — Vision thuần, đếm vật thể (cần ultralytics, xem bên dưới)
+.\chay.ps1 -v "Có mấy con chó trong ảnh? .\assets\dogs.jpg"
+
+# Ca 3 — ảnh lấy từ URL thay vì file trên máy
+.\chay.ps1 -v "Trong ảnh có gì? https://example.com/anh.jpg"
+
+# Ca 2 — Vision + Research, đi qua supervisor
+.\chay.ps1 "Khái niệm nào được minh hoạ trong ảnh .\assets\so-do.png? Tìm thêm bài báo về nó"
+
+# Ca 5 — tổng hợp, supervisor gọi lần lượt hai agent
+.\chay.ps1 "Chó trong ảnh .\assets\dogs.jpg màu lông gì? Và tìm thêm thông tin về giống chó này"
+```
+
+Đường dẫn ảnh **nằm ngay trong câu hỏi**, không có tham số riêng — tool tự bóc
+bằng regex, trượt thì mới nhờ LLM. Cả đường dẫn cục bộ lẫn URL đều được.
+
+Đang sửa code thì chạy `-r` / `-v` thay vì qua supervisor: bỏ được 2 lượt điều
+phối mỗi lần thử (quy tắc LX-06).
+
+### Đầu ra của Research Agent
+
+Research Agent trả lời bằng **tiếng Việt**, giữ nguyên thuật ngữ và tiêu đề bài
+báo bằng tiếng Anh, theo đúng ba mục:
+
+```
+TÓM TẮT
+RoPE mã hoá vị trí bằng phép quay vector query và key [1].
+
+CHI TIẾT
+- Kết hợp vị trí tuyệt đối và tương đối trong cùng một cơ chế [1]
+- Được xếp vào nhóm positional encoding [2]
+
+NGUỒN
+[1] RoFormer: Enhanced Transformer with Rotary Position Embedding (2021)
+    - http://arxiv.org/abs/2104.09864v5
+[2] wikipedia: Transformer (deep learning)
+```
+
+Sau câu trả lời, CLI in thêm khối `=== KIEM TRA NGUON ===` đối chiếu từng trích
+dẫn với kết quả tool (xem `app/core/grounding.py`). Khối này chỉ chạy khi lượt đó
+có dùng `arxiv_search`/`wikipedia_search`; Vision Agent lấy nguồn từ chính bức ảnh
+nên không bị soi. Tắt bằng `--skip-source-check` nếu đang thử thứ khác.
+
+> **Vision Agent vẫn trả lời tiếng Anh.** Ca 2 và ca 5 đi qua cả hai agent nên câu
+> trả lời cuối sẽ pha hai thứ tiếng. Muốn thống nhất thì thêm khối `LANGUAGE` của
+> `research_agent/prompts.py` vào `VISION_AGENT_PROMPT` — nhớ báo người phụ trách
+> Vision, đó là vùng của họ (Bảng 9).
+
+### Trước khi chạy ca có ảnh
+
+Ba thứ phải có, thiếu cái nào cũng hỏng đúng lúc demo:
+
+1. **`ultralytics`** — chỉ `detect_and_count_objects` (ca 4) mới cần. Thiếu thì tool
+   trả `ERROR: YOLO_NOT_INSTALLED`, còn `image_describer` vẫn chạy bình thường vì
+   nó dùng Gemini. Cài: `.\.venv\Scripts\python.exe -m pip install ultralytics==8.3.108`
+   (~2GB vì kéo theo torch — theo MT-05 chỉ người phụ trách Vision cần).
+2. **Ảnh trong `assets/`** — thư mục này trong repo chỉ có `README.md`, ảnh demo
+   không được commit khi quá 2MB (GIT-05). Tự bỏ ảnh vào trước khi quay demo.
+3. **Hạn mức Gemini** — đường ảnh chỉ có ~20 lượt/ngày mỗi model, tức khoảng
+   **10–20 câu hỏi ảnh mỗi ngày**. Đường chữ bên Groq thoải mái hơn nhiều (~200
+   câu/ngày). Chạy `-v` thay vì qua supervisor để tiết kiệm.
+
 ## Nhà cung cấp LLM — cấu hình lai
 
 Hệ thống chạy **hai nhà cung cấp cùng lúc**, mỗi vai trò một nơi:
@@ -156,6 +277,8 @@ pytest -m "not network"     # nhanh, không cần mạng, không cần API key
 pytest                      # thêm test gọi arXiv/Wikipedia thật (tự skip nếu mất mạng)
 pytest tests/test_contract.py   # chỉ kiểm tra hợp đồng chung của nhóm
 ```
+
+Trên Windows: `.\chay.ps1 -Test` chạy đúng dòng đầu tiên mà không cần kích hoạt venv.
 
 Toàn bộ test end-to-end dùng **model giả** trong `tests/fakes.py`, nên chạy test
 không tốn một đồng token nào.

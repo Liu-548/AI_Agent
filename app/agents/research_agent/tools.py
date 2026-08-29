@@ -40,6 +40,18 @@ class SearchBudget:
         self.tong_luot = 0
         self.da_goi: Set[Tuple[str, str]] = set()
 
+    def bat_dau_cau_hoi_moi(self) -> None:
+        """Xoá sổ để sang câu hỏi mới.
+
+        Sổ lượt phải tính theo TỪNG CÂU HỎI, không phải theo tiến trình. Chạy CLI
+        một câu một lần thì tiến trình chết sau mỗi câu nên không lộ ra. Nhưng bất
+        kỳ ai dùng lại một agent đã dựng sẵn cho nhiều câu hỏi — vòng lặp hỏi đáp,
+        web, notebook — sẽ thấy câu thứ hai bị chính tool từ chối với
+        "DA TIM TRUY VAN NAY ROI", và hết hẳn sau 4 lượt cho CẢ phiên.
+        """
+        self.tong_luot = 0
+        self.da_goi.clear()
+
     @staticmethod
     def _chuan_hoa(query: str) -> str:
         return " ".join(query.lower().split())
@@ -152,6 +164,7 @@ def make_arxiv_tool(
     return StructuredTool.from_function(
         func=_run,
         name="arxiv_search",
+        metadata={"search_budget": budget},
         description=(
             "Search peer-reviewed and preprint scientific papers on arXiv for a given "
             "topic. Returns publication date, title, authors and a short abstract for "
@@ -200,6 +213,7 @@ def make_wikipedia_tool(
     return StructuredTool.from_function(
         func=_run,
         name="wikipedia_search",
+        metadata={"search_budget": budget},
         description=(
             "Look up an encyclopedic definition or general background of a concept on "
             "Wikipedia. Use this to explain a term, a person, or an organisation. "
@@ -210,7 +224,39 @@ def make_wikipedia_tool(
 
 
 def default_research_tools(budget: Optional[SearchBudget] = None) -> List:
-    """Hai tool dùng CHUNG một sổ lượt -> tổng số lượt bị chặn, không phải mỗi tool một sổ."""
+    """Hai tool dùng CHUNG một sổ lượt -> tổng số lượt bị chặn, không phải mỗi tool một sổ.
+
+    Sổ được gắn vào `tool.metadata["search_budget"]` để người gọi lấy lại được mà
+    không phải giữ tham chiếu riêng — xem `reset_search_budget()`.
+    """
     if budget is None:
         budget = SearchBudget()
     return [make_arxiv_tool(budget=budget), make_wikipedia_tool(budget=budget)]
+
+
+def reset_search_budget(tools: Optional[List] = None) -> int:
+    """Xoá sổ lượt tìm kiếm của mọi tool trong danh sách. Trả về số sổ đã xoá.
+
+    GỌI TRƯỚC MỖI CÂU HỎI MỚI nếu bạn dùng lại một agent đã dựng sẵn:
+
+        tools = default_research_tools()
+        agent = build_research_agent(tools=tools)
+        while True:                      # vòng lặp hỏi đáp / web / notebook
+            cau_hoi = input("> ")
+            reset_search_budget(tools)   # <- thiếu dòng này là câu thứ 2 hỏng
+            agent.invoke(...)
+
+    CLI một-câu-một-lần (`python -m app.main ...`) KHÔNG cần gọi: tiến trình chết
+    sau mỗi câu nên sổ tự mất theo. Hàm này tồn tại cho mọi thứ chạy lâu hơn thế.
+
+    Hai sổ trỏ chung một đối tượng chỉ được xoá một lần (đếm theo id), nên con số
+    trả về là số SỔ chứ không phải số tool.
+    """
+    da_xoa = set()
+    for tool in tools or []:
+        meta = getattr(tool, "metadata", None)
+        budget = meta.get("search_budget") if isinstance(meta, dict) else None
+        if isinstance(budget, SearchBudget) and id(budget) not in da_xoa:
+            budget.bat_dau_cau_hoi_moi()
+            da_xoa.add(id(budget))
+    return len(da_xoa)

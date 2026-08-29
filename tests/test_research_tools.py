@@ -9,7 +9,13 @@ from __future__ import annotations
 import pytest
 
 from app.core.contracts import ERROR_PREFIX
-from app.agents.research_agent.tools import make_arxiv_tool, make_wikipedia_tool
+from app.agents.research_agent.tools import (
+    SearchBudget,
+    default_research_tools,
+    make_arxiv_tool,
+    make_wikipedia_tool,
+    reset_search_budget,
+)
 
 
 def test_arxiv_truy_van_rong_tra_error_chuan():
@@ -144,3 +150,53 @@ def test_cat_bot_theo_tung_bai_khong_nuot_mat_bai_cuoi():
     out = format_arxiv_docs(_hai_bai(), max_chars=600)
     assert out.count("Entry ID:") == 2
     assert "Attention Is All You Need" in out
+
+
+# --------------------------------------------------------------------------- #
+# Sổ lượt tìm kiếm phải tính theo TỪNG CÂU HỎI, không phải theo tiến trình
+# --------------------------------------------------------------------------- #
+class _ToolGia:
+    """Đủ giống một LangChain tool để reset_search_budget() làm việc được."""
+
+    def __init__(self, metadata=None):
+        self.metadata = metadata
+
+
+def test_cau_hoi_moi_duoc_tim_lai_dung_truy_van_do():
+    """Bug thật: sổ tạo một lần lúc dựng agent, không reset giữa các câu hỏi.
+
+    CLI một-câu-một-lần không lộ ra vì tiến trình chết sau mỗi câu. Nhưng vòng
+    lặp hỏi đáp / web dùng lại agent thì câu thứ hai bị chính tool từ chối, dù
+    người dùng đang hỏi một chuyện hoàn toàn mới.
+    """
+    so = SearchBudget(max_calls=2)
+    so.xin_luot("arxiv_search", "rotary embedding")
+    so.xin_luot("arxiv_search", "positional encoding")
+    assert so.xin_luot("arxiv_search", "rotary embedding") is not None  # còn trong sổ cũ
+
+    so.bat_dau_cau_hoi_moi()
+    assert so.xin_luot("arxiv_search", "rotary embedding") is None
+    assert so.tong_luot == 1
+
+
+def test_reset_search_budget_xoa_so_gan_trong_metadata():
+    so = SearchBudget(max_calls=4)
+    so.xin_luot("arxiv_search", "a")
+    tools = [_ToolGia({"search_budget": so}), _ToolGia({"search_budget": so})]
+
+    # Hai tool trỏ chung MỘT sổ -> chỉ tính là một sổ, không xoá hai lần.
+    assert reset_search_budget(tools) == 1
+    assert so.tong_luot == 0 and so.da_goi == set()
+
+
+def test_reset_search_budget_bo_qua_tool_khong_co_so():
+    assert reset_search_budget([]) == 0
+    assert reset_search_budget(None) == 0
+    assert reset_search_budget([_ToolGia(None), _ToolGia({"gi_do_khac": 1})]) == 0
+
+
+def test_hai_tool_mac_dinh_dung_chung_mot_so():
+    """Dùng chung sổ thì TỔNG lượt bị chặn; mỗi tool một sổ là chặn hụt một nửa."""
+    tools = default_research_tools()
+    so = [t.metadata["search_budget"] for t in tools]
+    assert so[0] is so[1]

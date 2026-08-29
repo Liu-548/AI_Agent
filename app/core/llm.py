@@ -68,6 +68,13 @@ def get_llm(role: Role):
     base_url = settings.base_url_for(provider)
     if base_url:
         kwargs["base_url"] = base_url
+
+    # Vai trò research + model gpt-oss (Groq): xem giải thích ở config.py,
+    # research_reasoning_effort -- không set thì model đốt hết ngân sách token
+    # vào suy nghĩ ẩn và trả lời bị cắt ngang giữa chừng.
+    if role == "research" and "gpt-oss" in model.lower() and settings.research_reasoning_effort:
+        kwargs["reasoning_effort"] = settings.research_reasoning_effort
+
     return ChatOpenAI(**kwargs)
 
 

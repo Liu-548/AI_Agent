@@ -16,7 +16,7 @@ from tests.fakes import FakeStructuredModel, fake_detector_factory
 
 EXPECTED_AGENTS = {"research_agent", "vision_agent"}
 EXPECTED_TOOLS = {
-    "research_agent": {"arxiv_search", "wikipedia_search"},
+    "research_agent": {"arxiv_search", "openalex_search", "wikipedia_search"},
     "vision_agent": {"image_describer", "detect_and_count_objects"},
 }
 

@@ -174,6 +174,132 @@ def make_arxiv_tool(
     )
 
 
+def _dung_lai_abstract(inverted_index: Optional[dict]) -> str:
+    """OpenAlex tra abstract dang 'inverted index' ({tu: [vi_tri,...]}) de tiet
+    kiem bang thong, khong tra van ban thang. Phai dung lai thanh cau van.
+    """
+    if not inverted_index:
+        return ""
+    vi_tri_toi_da = max(p for positions in inverted_index.values() for p in positions)
+    tu_theo_vi_tri = [""] * (vi_tri_toi_da + 1)
+    for tu, positions in inverted_index.items():
+        for p in positions:
+            tu_theo_vi_tri[p] = tu
+    return " ".join(w for w in tu_theo_vi_tri if w)
+
+
+def tim_openalex(query: str, top_k: int, mailto: str, timeout: float = 10.0) -> List[dict]:
+    """Goi thang REST API cua OpenAlex (khong can API key).
+
+    Dung tham so `select=` de CHI lay dung field can dung -> giam kich thuoc
+    payload tra ve, tuc la giam so token phai nhet vao prompt cho LLM so voi
+    lay nguyen ban ghi day du cua OpenAlex (co the vai KB/bai).
+    Tai lieu: https://docs.openalex.org/api-entities/works
+    """
+    import requests
+
+    params = {
+        "search": query,
+        "per-page": top_k,
+        "select": "id,doi,title,publication_year,authorships,abstract_inverted_index,cited_by_count",
+        "mailto": mailto,
+    }
+    resp = requests.get("https://api.openalex.org/works", params=params, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    items = []
+    for w in data.get("results", []) or []:
+        tac_gia = ", ".join(
+            (a.get("author") or {}).get("display_name", "")
+            for a in (w.get("authorships") or [])
+            if (a.get("author") or {}).get("display_name")
+        )
+        items.append(
+            {
+                "openalex_id": w.get("id") or "",
+                "doi": w.get("doi") or "",
+                "year": w.get("publication_year"),
+                "title": w.get("title") or "(khong co tieu de)",
+                "authors": tac_gia,
+                "cited_by_count": w.get("cited_by_count", 0),
+                "abstract": _dung_lai_abstract(w.get("abstract_inverted_index")),
+            }
+        )
+    return items
+
+
+def format_openalex_docs(items: List[dict], max_chars: int) -> str:
+    """Dung chuoi ket qua OpenAlex: cung khuon voi format_arxiv_docs de model
+    ap dung dung mot bo quy tac trich dan cho ca hai nguon.
+    """
+    if not items:
+        return ""
+    phan = max(200, max_chars // len(items))
+    khoi = []
+    for it in items:
+        tom_tat = " ".join((it.get("abstract") or "").split())
+        if not tom_tat:
+            tom_tat = "(khong co abstract)"
+        elif len(tom_tat) > phan:
+            tom_tat = tom_tat[:phan].rstrip() + "..."
+        khoi.append(
+            f"OpenAlex ID: {it.get('openalex_id', '(khong ro)')}\n"
+            f"DOI: {it.get('doi') or '(khong co)'}\n"
+            f"Published: {it.get('year', '')}\n"
+            f"Title: {it.get('title', '')}\n"
+            f"Authors: {it.get('authors', '')}\n"
+            f"Cited by: {it.get('cited_by_count', 0)}\n"
+            f"Summary: {tom_tat}"
+        )
+    return "\n\n".join(khoi)
+
+
+def make_openalex_tool(
+    top_k: int | None = None,
+    max_chars: int | None = None,
+    mailto: str | None = None,
+    budget: Optional[SearchBudget] = None,
+):
+    """Tao tool tra cuu bai bao tren OpenAlex.
+
+    Khac arxiv_search o cho OpenAlex phu het moi nganh (khong rieng CS/vat ly)
+    va co san so luot trich dan (cited_by_count) -- arXiv khong co so nay.
+    """
+    from langchain_core.tools import StructuredTool
+
+    _top_k = top_k if top_k is not None else settings.openalex_top_k
+    _max_chars = max_chars if max_chars is not None else settings.openalex_max_chars
+    _mailto = mailto if mailto is not None else settings.openalex_mailto
+
+    def _run(text: str) -> str:
+        if not text or not text.strip():
+            return tool_error("EMPTY_QUERY", "Cần một truy vấn để tìm trên OpenAlex.")
+        if budget is not None:
+            tu_choi = budget.xin_luot("openalex_search", text)
+            if tu_choi is not None:
+                return tu_choi
+        try:
+            items = tim_openalex(text.strip(), top_k=_top_k, mailto=_mailto)
+        except Exception as exc:  # mạng lỗi, OpenAlex 5xx, JSON hỏng...
+            return tool_error("OPENALEX_UNAVAILABLE", str(exc))
+        if not items:
+            return f"Không tìm thấy bài báo OpenAlex nào cho truy vấn: {text!r}"
+        return format_openalex_docs(items, _max_chars)
+
+    return StructuredTool.from_function(
+        func=_run,
+        name="openalex_search",
+        metadata={"search_budget": budget},
+        description=(
+            "Search scientific papers across ALL fields (not limited to CS/physics like "
+            "arXiv) via OpenAlex's large open index. Returns title, year, authors, citation "
+            "count and abstract. Use this when arxiv_search found nothing relevant, or the "
+            "topic is outside CS/physics (biology, medicine, social science, etc.)."
+        ),
+        args_schema=SearchInput,
+    )
+
+
 def make_wikipedia_tool(
     top_k: int | None = None,
     max_chars: int | None = None,
@@ -224,14 +350,18 @@ def make_wikipedia_tool(
 
 
 def default_research_tools(budget: Optional[SearchBudget] = None) -> List:
-    """Hai tool dùng CHUNG một sổ lượt -> tổng số lượt bị chặn, không phải mỗi tool một sổ.
+    """Ba tool dùng CHUNG một sổ lượt -> tổng số lượt bị chặn, không phải mỗi tool một sổ.
 
     Sổ được gắn vào `tool.metadata["search_budget"]` để người gọi lấy lại được mà
     không phải giữ tham chiếu riêng — xem `reset_search_budget()`.
     """
     if budget is None:
         budget = SearchBudget()
-    return [make_arxiv_tool(budget=budget), make_wikipedia_tool(budget=budget)]
+    return [
+        make_arxiv_tool(budget=budget),
+        make_openalex_tool(budget=budget),
+        make_wikipedia_tool(budget=budget),
+    ]
 
 
 def reset_search_budget(tools: Optional[List] = None) -> int:

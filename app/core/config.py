@@ -154,6 +154,14 @@ class Settings:
             "WIKIPEDIA_USER_AGENT", "VisualAgenticAI/1.0 (contact: team@example.com)"
         )
     )
+    openalex_top_k: int = field(default_factory=lambda: _env_int("OPENALEX_TOP_K", 2))
+    openalex_max_chars: int = field(default_factory=lambda: _env_int("OPENALEX_MAX_CHARS", 1000))
+    # OpenAlex khong bat buoc mailto, nhung co no thi vao "polite pool": nhanh va
+    # on dinh hon (it bi rate-limit khi tai cao). Mac dinh la placeholder, KHONG
+    # phai email that cua nguoi dung -- doi trong .env neu muon dung email that.
+    openalex_mailto: str = field(
+        default_factory=lambda: _env("OPENALEX_MAILTO", "team@example.com")
+    )
 
     # Trần số lượt tìm kiếm cho MỘT câu hỏi. Đây là dây phanh của vòng ReAct:
     # ở temperature 0, khi kết quả không như ý model gặp lại đúng bối cảnh cũ
@@ -161,6 +169,18 @@ class Settings:
     # -> Groq trả 400 output_parse_failed. Xem app/agents/research_agent/tools.py.
     research_max_searches: int = field(
         default_factory=lambda: _env_int("RESEARCH_MAX_SEARCHES", 6)
+    )
+
+    # Cac model "gpt-oss" cua Groq la reasoning model: mac dinh Groq tu dat
+    # reasoning_effort=medium, va model dot GAN HET ngan sach token mac dinh
+    # (2048) vao phan suy nghi AN, khong con cho de in cau tra loi -> tra loi
+    # bi cat ngang giua chung (finish_reason=length, content rong).
+    # Da kiem chung: dat "low" thi finish_reason=stop, reasoning_tokens giam
+    # tu ~2046 xuong ~28, tong token/luot goi giam manh (2048+ -> ~500).
+    # Chi ap dung cho vai tro "research" (xem app/core/llm.py) va chi khi model
+    # thuc su la gpt-oss -- de trong ("") de tat neu doi sang model khac.
+    research_reasoning_effort: str = field(
+        default_factory=lambda: _env("RESEARCH_REASONING_EFFORT", "low")
     )
 
     # --- Vision tools ---

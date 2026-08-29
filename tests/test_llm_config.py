@@ -20,6 +20,7 @@ BIEN = (
     "LLM_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY",
     "LLM_PROVIDER", "LLM_BASE_URL", "OPENAI_BASE_URL", "VISION_DETAIL",
     "MODEL_SUPERVISOR", "MODEL_RESEARCH", "MODEL_VISION", "MODEL_DESCRIBE", "MODEL_UTILITY",
+    "RESEARCH_REASONING_EFFORT",
 )
 
 
@@ -122,6 +123,49 @@ def test_provider_khong_hop_le_bao_loi(monkeypatch):
     )
     with pytest.raises(ValueError, match="cung c"):
         llm_mod.get_llm("research")
+
+
+# --------------------------- reasoning_effort (gpt-oss / Groq) ------------- #
+def test_research_gpt_oss_duoc_dat_reasoning_effort_thap(monkeypatch):
+    """Bug thật: mac dinh Groq dat reasoning_effort=medium cho gpt-oss, model
+    dot het ngan sach token vao suy nghi an -> tra loi bi cat ngang giua chung
+    (finish_reason=length). Đặt "low" thì trả lời xong bình thường.
+    """
+    _, llm_mod = _reload(
+        monkeypatch, GROQ_API_KEY=KEY_GROQ, MODEL_RESEARCH="groq:openai/gpt-oss-120b"
+    )
+    assert llm_mod.get_llm("research").reasoning_effort == "low"
+
+
+def test_reasoning_effort_khong_ap_dung_cho_model_khong_phai_gpt_oss(monkeypatch):
+    """Model thường (không reasoning) có thể không hiểu tham số này -> chỉ gửi
+    khi tên model có 'gpt-oss', để đổi model khác không tự dưng vỡ.
+    """
+    _, llm_mod = _reload(
+        monkeypatch, GROQ_API_KEY=KEY_GROQ, MODEL_RESEARCH="groq:llama-3.3-70b-versatile"
+    )
+    assert llm_mod.get_llm("research").reasoning_effort is None
+
+
+def test_reasoning_effort_chi_ap_dung_cho_vai_tro_research(monkeypatch):
+    """Cố ý CHƯA áp dụng cho supervisor dù cùng dùng gpt-oss trên Groq -- xem
+    NHATKY_PHAT_TRIEN_RESEARCH_AGENT.md, đây là quyết định có chủ đích, không
+    phải quên.
+    """
+    _, llm_mod = _reload(
+        monkeypatch, GROQ_API_KEY=KEY_GROQ, MODEL_SUPERVISOR="groq:openai/gpt-oss-120b"
+    )
+    assert llm_mod.get_llm("supervisor").reasoning_effort is None
+
+
+def test_co_the_tat_reasoning_effort_qua_env(monkeypatch):
+    _, llm_mod = _reload(
+        monkeypatch,
+        GROQ_API_KEY=KEY_GROQ,
+        MODEL_RESEARCH="groq:openai/gpt-oss-120b",
+        RESEARCH_REASONING_EFFORT="",
+    )
+    assert llm_mod.get_llm("research").reasoning_effort is None
 
 
 def test_mo_ta_cau_hinh_khong_lo_key(monkeypatch):

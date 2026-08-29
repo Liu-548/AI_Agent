@@ -13,6 +13,7 @@ from app.agents.research_agent.tools import (
     SearchBudget,
     default_research_tools,
     make_arxiv_tool,
+    make_openalex_tool,
     make_wikipedia_tool,
     reset_search_budget,
 )
@@ -20,6 +21,11 @@ from app.agents.research_agent.tools import (
 
 def test_arxiv_truy_van_rong_tra_error_chuan():
     out = make_arxiv_tool().invoke({"text": "   "})
+    assert out.startswith(ERROR_PREFIX) and "EMPTY_QUERY" in out
+
+
+def test_openalex_truy_van_rong_tra_error_chuan():
+    out = make_openalex_tool().invoke({"text": "   "})
     assert out.startswith(ERROR_PREFIX) and "EMPTY_QUERY" in out
 
 
@@ -41,6 +47,14 @@ def test_arxiv_tra_ve_bai_bao_that():
         make_arxiv_tool(top_k=1, max_chars=600).invoke({"text": "rotary positional embedding"})
     )
     assert "Title:" in out and "Published:" in out
+
+
+@pytest.mark.network
+def test_openalex_tra_ve_bai_bao_that():
+    out = _bo_qua_neu_mat_mang(
+        make_openalex_tool(top_k=1, max_chars=600).invoke({"text": "rotary positional embedding"})
+    )
+    assert "Title:" in out and "OpenAlex ID:" in out
 
 
 @pytest.mark.network
@@ -195,8 +209,47 @@ def test_reset_search_budget_bo_qua_tool_khong_co_so():
     assert reset_search_budget([_ToolGia(None), _ToolGia({"gi_do_khac": 1})]) == 0
 
 
-def test_hai_tool_mac_dinh_dung_chung_mot_so():
-    """Dùng chung sổ thì TỔNG lượt bị chặn; mỗi tool một sổ là chặn hụt một nửa."""
+def test_ba_tool_mac_dinh_dung_chung_mot_so():
+    """Dùng chung sổ thì TỔNG lượt bị chặn; mỗi tool một sổ là chặn hụt."""
     tools = default_research_tools()
+    assert len(tools) == 3
     so = [t.metadata["search_budget"] for t in tools]
-    assert so[0] is so[1]
+    assert so[0] is so[1] is so[2]
+
+
+# --------------------------------------------------------------------------- #
+# OpenAlex: dựng lại abstract từ inverted index + định dạng kết quả
+# --------------------------------------------------------------------------- #
+from app.agents.research_agent.tools import _dung_lai_abstract, format_openalex_docs
+
+
+def test_dung_lai_abstract_tu_inverted_index():
+    """OpenAlex trả {tu: [vi_tri,...]}, không phải văn bản thẳng -- phải dựng lại đúng thứ tự."""
+    inverted = {"Attention": [0], "is": [1], "all": [2], "you": [3], "need": [4]}
+    assert _dung_lai_abstract(inverted) == "Attention is all you need"
+
+
+def test_dung_lai_abstract_rong_tra_chuoi_rong():
+    assert _dung_lai_abstract(None) == ""
+    assert _dung_lai_abstract({}) == ""
+
+
+def _mot_bai_openalex():
+    return [
+        {
+            "openalex_id": "https://openalex.org/W2741809807",
+            "doi": "https://doi.org/10.7717/peerj.4375",
+            "year": 2018,
+            "title": "The state of OA: a large-scale analysis",
+            "authors": "Heather Piwowar, Jason Priem",
+            "cited_by_count": 1234,
+            "abstract": "Tom tat bai openalex. " * 40,
+        }
+    ]
+
+
+def test_ket_qua_openalex_co_kem_openalex_id():
+    """Không có OpenAlex ID trong kết quả thì grounding.py không xác minh được nguồn."""
+    out = format_openalex_docs(_mot_bai_openalex(), max_chars=1000)
+    assert "https://openalex.org/W2741809807" in out
+    assert "Cited by: 1234" in out

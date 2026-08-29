@@ -27,6 +27,10 @@ HAI ĐỊNH DẠNG TRÍCH DẪN đều được chấp nhận:
 
        RoPE mã hoá vị trí bằng phép quay [http://arxiv.org/abs/2104.09864v5].
 
+Nguồn OpenAlex (thêm sau, xem MA_OPENALEX_RE) đi theo ĐÚNG khuôn của arXiv:
+mục NGUỒN chứa một "OpenAlex ID: https://openalex.org/W..." copy nguyên văn từ
+tool, được nhận diện y hệt cách nhận diện Entry ID của arXiv.
+
 Module này chỉ TỐ CÁO, không sửa câu trả lời. Sửa hộ model là che mất lỗi.
 """
 
@@ -59,6 +63,9 @@ MUC_NGUON_RE = re.compile(r"^\s*\[(\d{1,3})\]\s*(.*)$")
 
 # Mã bài báo arXiv dưới mọi dạng model hay viết.
 MA_ARXIV_RE = re.compile(r"(?:arxiv\.org/abs/|arxiv:\s*)(\d{4}\.\d{4,5})", re.IGNORECASE)
+
+# Mã Work ID của OpenAlex, dạng "https://openalex.org/W2741809807".
+MA_OPENALEX_RE = re.compile(r"openalex\.org/(W\d+)", re.IGNORECASE)
 
 # Dòng "Page: ..." trong kết quả wikipedia_search — nguồn hợp lệ duy nhất cho nhãn wikipedia.
 TRANG_WIKI_RE = re.compile(r"^Page:\s*(.+)$", re.MULTILINE)
@@ -146,6 +153,11 @@ def ma_arxiv_trong(text: str) -> List[str]:
     return [m.group(1) for m in MA_ARXIV_RE.finditer(text or "")]
 
 
+def ma_openalex_trong(text: str) -> List[str]:
+    """Mọi mã Work ID của OpenAlex (dạng W123456789) xuất hiện trong một đoạn văn bản."""
+    return [m.group(1) for m in MA_OPENALEX_RE.finditer(text or "")]
+
+
 def _soi_nguon(noi_dung: str, kho_chuan: str, trang_wiki: Set[str]) -> Optional[str]:
     """Một chuỗi nguồn có truy được về kết quả tool không?
 
@@ -158,6 +170,8 @@ def _soi_nguon(noi_dung: str, kho_chuan: str, trang_wiki: Set[str]) -> Optional[
     if not noi_dung:
         return "mục nguồn để trống"
     if ma_arxiv_trong(noi_dung):
+        return None
+    if ma_openalex_trong(noi_dung):
         return None
     khop_wiki = NHAN_WIKI_RE.search(noi_dung)
     if khop_wiki:
@@ -186,6 +200,7 @@ def kiem_tra_grounding(answer: str, tool_texts: Iterable[str]) -> List[str]:
     kho = "\n".join(t or "" for t in tool_texts)
     kho_chuan = _chuan_hoa(kho)
     ma_that = set(ma_arxiv_trong(kho))
+    ma_openalex_that = set(ma_openalex_trong(kho))
     trang_wiki = {_chuan_hoa(t) for t in TRANG_WIKI_RE.findall(kho)}
 
     vi_pham: List[str] = []
@@ -195,10 +210,13 @@ def kiem_tra_grounding(answer: str, tool_texts: Iterable[str]) -> List[str]:
 
     than, nguon = tach_danh_sach_nguon(answer)
 
-    # 1. Mã arXiv bịa — soi TOÀN BỘ câu trả lời, kể cả phần danh sách nguồn.
+    # 1. Mã arXiv / OpenAlex bịa — soi TOÀN BỘ câu trả lời, kể cả phần danh sách nguồn.
     for ma in dict.fromkeys(ma_arxiv_trong(answer)):
         if ma not in ma_that:
             vi_pham.append(f"MA_BIA: arXiv {ma} không có trong bất kỳ kết quả tool nào")
+    for ma in dict.fromkeys(ma_openalex_trong(answer)):
+        if ma not in ma_openalex_that:
+            vi_pham.append(f"MA_BIA: OpenAlex {ma} không có trong bất kỳ kết quả tool nào")
 
     # 2. Mỗi mục trong NGUỒN phải trỏ tới thứ tool thật sự đã trả về.
     for so in sorted(nguon, key=lambda x: int(x)):

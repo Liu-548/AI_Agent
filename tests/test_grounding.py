@@ -10,6 +10,7 @@ from app.core.grounding import (
     bao_cao,
     kiem_tra_grounding,
     ma_arxiv_trong,
+    ma_openalex_trong,
     tach_cau,
     tach_danh_sach_nguon,
 )
@@ -196,3 +197,40 @@ def test_khong_co_muc_nguon_thi_giu_nguyen_dinh_dang_cu():
     than, nguon = tach_danh_sach_nguon("Mot cau [http://arxiv.org/abs/2104.09864v5].")
     assert nguon == {}
     assert than.startswith("Mot cau")
+
+
+# --------------------------------------------------------------------------- #
+# Nguồn OpenAlex — đi theo đúng khuôn arXiv (mục NGUỒN mang OpenAlex ID)
+# --------------------------------------------------------------------------- #
+TOOL_OPENALEX = """OpenAlex ID: https://openalex.org/W2741809807
+DOI: https://doi.org/10.7717/peerj.4375
+Published: 2018
+Title: The state of OA: a large-scale analysis
+Authors: Heather Piwowar, Jason Priem
+Cited by: 1234
+Summary: We estimate the number of articles that are freely available online."""
+
+TRA_LOI_OPENALEX = """TÓM TẮT
+Phần lớn bài báo học thuật hiện đã có bản truy cập mở [1].
+
+CHI TIẾT
+- Nghiên cứu này ước tính tỉ lệ bài báo truy cập mở trên diện rộng [1]
+
+NGUỒN
+[1] The state of OA: a large-scale analysis (2018)
+    - https://openalex.org/W2741809807
+"""
+
+
+def test_ma_openalex_nhan_dung():
+    assert ma_openalex_trong("xem https://openalex.org/W2741809807") == ["W2741809807"]
+
+
+def test_nguon_openalex_hop_le_khong_vi_pham():
+    assert kiem_tra_grounding(TRA_LOI_OPENALEX, [TOOL_OPENALEX]) == []
+
+
+def test_bat_duoc_ma_openalex_bia():
+    tra_loi = TRA_LOI_OPENALEX.replace("W2741809807", "W9999999999")
+    vi_pham = kiem_tra_grounding(tra_loi, [TOOL_OPENALEX])
+    assert any(v.startswith("MA_BIA") and "W9999999999" in v for v in vi_pham)

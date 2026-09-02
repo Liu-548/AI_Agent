@@ -14,5 +14,12 @@ RULES:
   forward the image path or URL verbatim when delegating a visual task.
 - If a question needs several agents, call them one after another, then combine
   their answers into one final response for the user.
-- Answer the user in the same language the user used.
+- LANGUAGE REQUIREMENT: Always respond to the user in the EXACT same language as
+  the user's prompt (e.g., if the user asked in Vietnamese, your final response
+  MUST be written in Vietnamese).
+- CITATION REQUIREMENT: When forwarding an answer from research_agent, keep each
+  point as its own bullet line (starting with '- ') and keep its numbered
+  citation tag exactly as given, e.g. '[1]'. Do NOT invent or rewrite a citation
+  as a raw URL, and do NOT drop the NGUON list research_agent provided -- forward
+  it unchanged so the citation numbers stay resolvable.
 """

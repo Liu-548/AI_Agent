@@ -26,7 +26,11 @@
       Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #>
 
-[CmdletBinding()]
+# PositionalBinding = $false: khong co no thi $Agent (string, khong danh dau
+# vi tri) am tham "nuot" cau hoi lam tham so vi tri dau tien cua no, con
+# $CauHoi (ValueFromRemainingArguments) nhan duoc mang RONG -> luon bao
+# "Thieu cau hoi" du go dung cu phap. Da kiem chung bang script test rieng.
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [Alias('r')][switch]$Research,
     [Alias('v')][switch]$Vision,

@@ -169,6 +169,18 @@ def test_bat_duoc_trang_wikipedia_bia_trong_muc_nguon():
     assert any(v.startswith("NGUON_BIA") and "[2]" in v for v in vi_pham)
 
 
+def test_dong_thua_sau_muc_wikipedia_khong_lam_bao_dong_gia():
+    """Lỗi thật đã gặp: model tự thêm dòng "- Page: X" thừa sau mục wikipedia
+    (đặc tả chỉ có đúng 1 dòng). Dòng thừa bị nuốt chung vào nhãn làm
+    NHAN_WIKI_RE bắt luôn phần rác, không khớp "Page:" thật -> báo NGUON_BIA giả.
+    """
+    tra_loi = TRA_LOI_MOI.replace(
+        "[2] wikipedia: Transformer (deep learning)",
+        "[2] wikipedia: Transformer (deep learning)\n    - Page: Transformer (deep learning)",
+    )
+    assert kiem_tra_grounding(tra_loi, [TOOL_ARXIV, TOOL_WIKI]) == []
+
+
 def test_cau_tieng_viet_khong_gan_trich_dan_van_bi_bat():
     tra_loi = TRA_LOI_MOI.replace(
         "CHI TIẾT\n",

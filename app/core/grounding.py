@@ -119,6 +119,13 @@ def tach_danh_sach_nguon(answer: str) -> Tuple[str, Dict[str, str]]:
             so_hien_tai = _chuan_so(khop.group(1))
             nguon[so_hien_tai] = khop.group(2).strip()
         elif so_hien_tai is not None and d.strip():
+            if "wikipedia:" in nguon[so_hien_tai].lower():
+                # Mục wikipedia CHỈ có một dòng theo đặc tả prompt (khác arXiv/
+                # OpenAlex có dòng URL xuống hàng riêng). Model thỉnh thoảng vẫn
+                # thừa thêm một dòng kiểu "- Page: X" -- nuốt dòng đó vào nhãn sẽ
+                # làm NHAN_WIKI_RE bắt luôn phần rác, so khớp sai với "Page:" thật
+                # trong kết quả tool và báo NGUON_BIA giả. Bỏ qua, không nuốt.
+                continue
             # Dòng xuống hàng của mục phía trên (model hay thụt lề phần URL).
             nguon[so_hien_tai] = (nguon[so_hien_tai] + " " + d.strip()).strip()
     return than, nguon

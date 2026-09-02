@@ -65,6 +65,14 @@ def _env_bool(key: str, default: bool = False) -> bool:
     return raw in {"1", "true", "yes", "y", "on"}
 
 
+def _env_float(key: str, default: float) -> float:
+    raw = _env(key)
+    try:
+        return float(raw) if raw else default
+    except ValueError:
+        return default
+
+
 # --------------------------------------------------------------------------- #
 # Nhà cung cấp
 # --------------------------------------------------------------------------- #
@@ -186,7 +194,17 @@ class Settings:
     # --- Vision tools ---
     # yolo11n.pt (~5MB) đủ cho dev; yolo11x.pt (~109MB) chỉ dùng khi cần độ chính xác.
     yolo_weights: str = field(default_factory=lambda: _env("YOLO_WEIGHTS", "yolo11n.pt"))
-    yolo_conf: float = 0.25
+    yolo_conf: float = field(default_factory=lambda: _env_float("YOLO_CONF", 0.25))
+    # Ngưỡng NMS: 2 khung cùng loại vật thể chồng nhau quá tỉ lệ này (IoU) sẽ bị
+    # gộp/loại còn 1 khung tốt nhất. Mặc định ultralytics là 0.7 (khá lỏng), dễ
+    # để lọt 2 khung trên cùng 1 vật thể khi ảnh có nhiều đối tượng sát nhau
+    # (mặt chó chụm lại, đám đông...). Hạ xuống 0.45 để loại trùng lặp mạnh hơn.
+    yolo_iou: float = field(default_factory=lambda: _env_float("YOLO_IOU", 0.45))
+    # Mặc định TẮT: chỉ lưu thêm ảnh có vẽ khung khi thật sự cần xem trực quan,
+    # tránh sinh file "_detected.jpg" rác mỗi lần chạy câu hỏi đếm vật thể.
+    draw_detections_enabled: bool = field(
+        default_factory=lambda: _env_bool("DRAW_DETECTIONS", False)
+    )
     # `detail` là tham số RIÊNG của OpenAI. Để rỗng là bỏ hẳn trường này khỏi payload.
     vision_detail: str = field(default_factory=lambda: _env("VISION_DETAIL"))
     # Xem Bảng 3 mục IF-06: mặc định False để ReAct loop không bị cắt ngang.

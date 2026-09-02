@@ -9,7 +9,9 @@ import json
 import pytest
 
 from app.core.contracts import ERROR_PREFIX
+from app.agents.vision_agent import tools as vision_tools
 from app.agents.vision_agent.tools import (
+    default_detector,
     make_detect_and_count_tool,
     make_image_describer_tool,
     parse_yolo_results,
@@ -130,6 +132,60 @@ def test_thieu_ultralytics_bao_loi_de_hieu(anh_png):
     tool = make_detect_and_count_tool(detector=_thieu)
     out = tool.invoke({"text": anh_png})
     assert "YOLO_NOT_INSTALLED" in out and "pip install ultralytics" in out
+
+
+# --------------------------- default_detector ------------------------------ #
+class _FakeYoloModel:
+    """Model YOLO giả — chỉ ghi lại tham số nó nhận được, không suy luận gì cả."""
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, image_ref, **kwargs):
+        self.calls.append({"image_ref": image_ref, **kwargs})
+        return []
+
+
+class _FakeSettings:
+    """Đứng thay app.core.config.settings — chỉ có đúng field default_detector cần."""
+
+    def __init__(self, yolo_conf: float, yolo_iou: float = 0.45, yolo_weights: str = "yolo11n.pt"):
+        self.yolo_conf = yolo_conf
+        self.yolo_iou = yolo_iou
+        self.yolo_weights = yolo_weights
+
+
+def test_default_detector_truyen_dung_conf_xuong_model(monkeypatch):
+    """Khóa lại fix: thiếu dòng conf=settings.yolo_conf thì test này phải đỏ.
+
+    Trước fix, default_detector() gọi model(image_ref, verbose=False) — không hề
+    truyền `conf`, nên dù settings.yolo_conf là bao nhiêu cũng không có tác dụng.
+    """
+    fake_model = _FakeYoloModel()
+    monkeypatch.setattr(vision_tools, "_load_yolo", lambda weights: fake_model)
+    monkeypatch.setattr(vision_tools, "settings", _FakeSettings(yolo_conf=0.42, yolo_iou=0.5))
+
+    default_detector("bat_ky_anh_nao.jpg")
+
+    assert len(fake_model.calls) == 1
+    assert fake_model.calls[0]["conf"] == 0.42
+    assert fake_model.calls[0]["iou"] == 0.5
+    assert fake_model.calls[0]["verbose"] is False
+
+
+def test_default_detector_conf_khac_nhau_thi_truyen_khac_nhau(monkeypatch):
+    """Đổi YOLO_CONF (qua settings) phải phản ánh đúng vào lời gọi model — không bị cache/giữ giá trị cũ."""
+    fake_model = _FakeYoloModel()
+    monkeypatch.setattr(vision_tools, "_load_yolo", lambda weights: fake_model)
+
+    monkeypatch.setattr(vision_tools, "settings", _FakeSettings(yolo_conf=0.1))
+    default_detector("anh_1.jpg")
+
+    monkeypatch.setattr(vision_tools, "settings", _FakeSettings(yolo_conf=0.9))
+    default_detector("anh_2.jpg")
+
+    assert fake_model.calls[0]["conf"] == 0.1
+    assert fake_model.calls[1]["conf"] == 0.9
 
 
 def test_parse_yolo_results_bbox_dung_thu_tu_xyxy():

@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from app.core.config import settings
 from app.core.contracts import tool_error
 from app.agents.vision_agent.prompts import IMAGE_DESCRIBER_SYSTEM_PROMPT
-from app.agents.vision_agent.image_utils import encode_image, extract_image_ref
+from app.agents.vision_agent.image_utils import draw_detections, encode_image, extract_image_ref
 
 
 class ImageToolInput(BaseModel):
@@ -26,6 +26,19 @@ class ImageToolInput(BaseModel):
 
 class ImageDescription(BaseModel):
     image_description: str = Field(description="Detailed description of the image")
+
+
+def _message_content_text(result: Any) -> str:
+    content = getattr(result, "content", "")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("text"):
+                parts.append(str(block["text"]))
+        return "\n".join(parts).strip()
+    return str(content).strip() if content else ""
 
 
 # --------------------------------------------------------------------------- #
@@ -60,9 +73,14 @@ def describe_image(image_path_or_url: str, vision_llm) -> str:
     ]
     try:
         result = vision_llm.with_structured_output(ImageDescription).invoke(messages)
-    except Exception as exc:
-        return tool_error("VISION_LLM_FAILED", str(exc))
-    description = getattr(result, "image_description", None)
+        description = getattr(result, "image_description", None)
+    except Exception as structured_exc:
+        try:
+            description = _message_content_text(vision_llm.invoke(messages))
+        except Exception as plain_exc:
+            return tool_error("VISION_LLM_FAILED", str(plain_exc or structured_exc))
+        if not description:
+            return tool_error("VISION_LLM_FAILED", str(structured_exc))
     if not description:
         return tool_error("VISION_EMPTY", "Vision model không trả về mô tả.")
     return description
@@ -122,7 +140,7 @@ def _load_yolo(weights: str):
 
 def default_detector(image_ref: str) -> Any:
     model = _load_yolo(settings.yolo_weights)
-    return model(image_ref, verbose=False)
+    return model(image_ref, conf=settings.yolo_conf, iou=settings.yolo_iou, verbose=False)
 
 
 def parse_yolo_results(results: Any) -> dict:
@@ -181,6 +199,12 @@ def make_detect_and_count_tool(
                 {"counting": {}, "detections": [], "note": "No object detected."},
                 ensure_ascii=False,
             )
+        # Vẽ khung lên ảnh gốc chỉ khi bật DRAW_DETECTIONS=1 trong .env -- mặc định
+        # TẮT để không sinh file "_detected.jpg" rác mỗi lần đếm vật thể.
+        if settings.draw_detections_enabled:
+            annotated_path = draw_detections(ref, payload["detections"])
+            if annotated_path:
+                payload["annotated_image"] = annotated_path
         return json.dumps(payload, ensure_ascii=False)
 
     return StructuredTool.from_function(
@@ -189,8 +213,11 @@ def make_detect_and_count_tool(
         description=(
             "Detect and count objects inside an image using an object detector. "
             "Input is the image path or URL. Returns JSON with `counting` (how many "
-            "instances of each class) and `detections` (class, confidence, bbox in "
-            "x1,y1,x2,y2 format). Use this for any 'how many' question about an image."
+            "instances of each class), `detections` (class, confidence, bbox in "
+            "x1,y1,x2,y2 format), and `annotated_image` (path to a copy of the image "
+            "with boxes drawn on it, when available). Use this for any 'how many' "
+            "question about an image, and mention the annotated_image path to the user "
+            "if present so they can open it and see the boxes."
         ),
         args_schema=ImageToolInput,
     )

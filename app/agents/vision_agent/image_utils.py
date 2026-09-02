@@ -88,6 +88,71 @@ def encode_image(
     return (b64, mime) if get_mime_type else b64
 
 
+def draw_detections(image_ref: str, detections: list, output_path: Optional[str] = None) -> Optional[str]:
+    """Vẽ khung + nhãn (class, confidence) lên ảnh gốc từ kết quả detect_and_count_objects.
+
+    image_ref    : path hoặc URL ảnh gốc (giống tham số truyền cho encode_image).
+    detections   : list các dict {"class": ..., "confidence": ..., "bbox": [x1,y1,x2,y2]}
+                   -- đúng định dạng trả về của parse_yolo_results()["detections"].
+    output_path  : nơi lưu ảnh mới. None -> tự đặt tên "<ten_goc>_detected.jpg" cạnh ảnh gốc
+                   (chỉ áp dụng khi image_ref là file local; ảnh tải từ URL bắt buộc phải
+                   truyền output_path).
+
+    Trả về đường dẫn file đã lưu, hoặc None nếu không đọc/vẽ được (không raise).
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    if not detections:
+        return None
+
+    try:
+        if image_ref.lower().startswith("http"):
+            resp = requests.get(image_ref, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+            if output_path is None:
+                return None  # không có tên file gốc để tự đặt tên ra -> bắt buộc phải truyền
+        else:
+            if not os.path.exists(image_ref):
+                return None
+            img = Image.open(image_ref).convert("RGB")
+            if output_path is None:
+                root, _ext = os.path.splitext(image_ref)
+                output_path = f"{root}_detected.jpg"
+    except Exception:
+        return None
+
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.load_default()
+    except Exception:  # pragma: no cover - luôn có sẵn trên hầu hết máy
+        font = None
+
+    # Một màu cố định cho mỗi tên class, để cùng loại vật thể luôn cùng màu khung.
+    palette = ["#FF3B30", "#34C759", "#007AFF", "#FF9500", "#AF52DE", "#00C7BE"]
+    color_by_class: dict = {}
+
+    for det in detections:
+        cls = str(det.get("class", "?"))
+        conf = det.get("confidence", 0)
+        bbox = det.get("bbox") or [0, 0, 0, 0]
+        x1, y1, x2, y2 = bbox
+        color = color_by_class.setdefault(cls, palette[len(color_by_class) % len(palette)])
+
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
+        label = f"{cls} {conf:.0%}" if isinstance(conf, (int, float)) else cls
+        text_bbox = draw.textbbox((x1, y1), label, font=font)
+        text_h = text_bbox[3] - text_bbox[1]
+        draw.rectangle([x1, y1 - text_h - 4, text_bbox[2] + 4, y1], fill=color)
+        draw.text((x1 + 2, y1 - text_h - 2), label, fill="white", font=font)
+
+    try:
+        img.save(output_path, "JPEG", quality=90)
+    except Exception:
+        return None
+    return output_path
+
+
 def extract_image_ref(text: str, llm=None) -> Optional[str]:
     """Tách đường dẫn/URL ảnh ra khỏi câu hỏi tự do.
 
@@ -105,6 +170,28 @@ def extract_image_ref(text: str, llm=None) -> Optional[str]:
         url = m.group(0).rstrip(".,;:")
         if url.lower().split("?")[0].endswith(IMAGE_EXTS):
             return url
+
+    # 1a-bis. Đường dẫn local có DẤU CÁCH trong tên thư mục
+    # (vd Windows "C:\Users\Dell Latitude 7410\Downloads\test.jpg").
+    # Token-split ở bước 1b bên dưới cắt theo khoảng trắng nên sẽ làm gãy path kiểu
+    # này (mất phần trước dấu cách). Ở đây bắt path trực tiếp bằng regex cho phép
+    # dấu cách BÊN TRONG mỗi thành phần thư mục, nhưng không cho phép các ký tự
+    # không hợp lệ trong path ('/', '\', ':', '*', '?', '"', '<', '>', '|').
+    _EXT_ALT = "|".join(e.lstrip(".") for e in IMAGE_EXTS)
+    _WIN_PATH_RE = re.compile(
+        r"[A-Za-z]:[\\/](?:[^\r\n\\/:*?\"<>|]+[\\/])*[^\r\n\\/:*?\"<>|]+\.(?:%s)" % _EXT_ALT,
+        re.IGNORECASE,
+    )
+    _UNIX_PATH_RE = re.compile(
+        r"/(?:[^\r\n/:*?\"<>|]+/)*[^\r\n/:*?\"<>|]+\.(?:%s)" % _EXT_ALT,
+        re.IGNORECASE,
+    )
+    for pattern in (_WIN_PATH_RE, _UNIX_PATH_RE):
+        m = pattern.search(text)
+        if m:
+            cand = m.group(0).strip().rstrip(".,;:!?")
+            if os.path.exists(cand):
+                return cand
 
     # 1b. Đường dẫn file local
     for raw in _TOKEN_SPLIT_RE.split(text):

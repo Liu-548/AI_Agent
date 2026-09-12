@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from app.core.authenticity import bao_cao_xac_thuc, kiem_tra_xac_thuc
 from app.core.config import settings
 from app.core.grounding import bao_cao, kiem_tra_grounding
 from app.core.pretty import final_text, message_text, pretty_print_messages
@@ -39,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--skip-source-check",
         action="store_true",
-        help="Bỏ qua bước đối chiếu câu trả lời với kết quả tool",
+        help="Bỏ qua bước đối chiếu nguồn + kiểm tra nguồn bị rút (retracted/withdrawn)",
     )
     parser.add_argument("--config", action="store_true", help="In cấu hình model/provider")
     parser.add_argument(
@@ -97,10 +98,15 @@ def main(argv: list[str] | None = None) -> int:
 
     # Chỉ đối chiếu khi câu trả lời thực sự dựa trên tool tra cứu tài liệu.
     # Vision Agent mô tả ảnh, nguồn của nó là chính bức ảnh, không có nhãn để đối chiếu.
-    can_kiem_tra = bool(tool_names & {"arxiv_search", "wikipedia_search"})
+    can_kiem_tra = bool(tool_names & {"arxiv_search", "openalex_search", "wikipedia_search"})
     if cau_tra_loi and can_kiem_tra and not args.skip_source_check:
         print()
         print(bao_cao(kiem_tra_grounding(cau_tra_loi, tool_texts)))
+        # Nguồn tồn tại (grounding) không đồng nghĩa nguồn còn đáng tin -- kiểm
+        # tra thêm cờ retracted/withdrawn mà OpenAlex/arXiv tự công bố. Thuần
+        # Python, đọc lại dữ liệu tool đã có sẵn, không tốn thêm hạn mức nào.
+        print()
+        print(bao_cao_xac_thuc(kiem_tra_xac_thuc(cau_tra_loi, tool_texts)))
     return 0
 
 

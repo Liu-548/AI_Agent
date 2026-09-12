@@ -8,6 +8,7 @@ Mọi tool đều theo hợp đồng ở app/contracts.py:
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional, Set, Tuple
 
 from pydantic import BaseModel, Field
@@ -75,6 +76,11 @@ class SearchBudget:
         return None
 
 
+# Chỉ nhận diện đúng cụm arXiv hay dùng để báo rút bài, tránh bắt nhầm những chỗ
+# vô hại nói "withdraw" (vd. rút một tuyên bố trong bài, không phải rút cả bài).
+_TU_KHOA_RUT_RE = re.compile(r"paper\s+(?:has\s+been\s+)?withdrawn", re.IGNORECASE)
+
+
 def tim_arxiv(wrapper, query: str) -> List:
     """Gọi arXiv rồi trả về ĐỐI TƯỢNG GỐC, không lấy chuỗi wrapper định dạng sẵn.
 
@@ -86,23 +92,33 @@ def tim_arxiv(wrapper, query: str) -> List:
 
     Chỉ dùng thuộc tính công khai của wrapper nên không vỡ khi langchain đổi
     phần thân bên trong.
+
+    Nhân tiện lấy luôn cờ `withdrawn` — tác giả rút bài trên arXiv thì luôn ghi
+    chữ "withdrawn" vào `comment` hoặc ngay đầu `summary` (quy ước của arXiv, xem
+    https://info.arxiv.org/help/withdraw.html). Đọc lại đúng field ĐÃ có trong
+    response, không gọi thêm request nào -- không tốn thêm hạn mức/băng thông.
     """
     q = query[: wrapper.ARXIV_MAX_QUERY_LENGTH]
     if wrapper.is_arxiv_identifier(query):
         tim = wrapper.arxiv_search(id_list=q.split(), max_results=wrapper.top_k_results)
     else:
         tim = wrapper.arxiv_search(q, max_results=wrapper.top_k_results)
-    return [
-        {
-            "entry_id": r.entry_id,
-            "published": str(r.published.date()),
-            "updated": str(r.updated.date()),
-            "title": r.title,
-            "authors": ", ".join(a.name for a in r.authors),
-            "summary": r.summary,
-        }
-        for r in tim.results()
-    ]
+    ket_qua = []
+    for r in tim.results():
+        ghi_chu = getattr(r, "comment", None) or ""
+        da_rut = bool(_TU_KHOA_RUT_RE.search(ghi_chu) or _TU_KHOA_RUT_RE.search(r.summary or ""))
+        ket_qua.append(
+            {
+                "entry_id": r.entry_id,
+                "published": str(r.published.date()),
+                "updated": str(r.updated.date()),
+                "title": r.title,
+                "authors": ", ".join(a.name for a in r.authors),
+                "summary": r.summary,
+                "withdrawn": da_rut,
+            }
+        )
+    return ket_qua
 
 
 def format_arxiv_docs(items: List[dict], max_chars: int) -> str:
@@ -119,7 +135,7 @@ def format_arxiv_docs(items: List[dict], max_chars: int) -> str:
         tom_tat = " ".join((it.get("summary") or "").split())
         if len(tom_tat) > phan:
             tom_tat = tom_tat[:phan].rstrip() + "..."
-        khoi.append(
+        khoi_text = (
             f"Entry ID: {it.get('entry_id', '(không rõ)')}\n"
             f"Published: {it.get('published', '')}\n"
             f"Last updated: {it.get('updated', '')}\n"
@@ -127,6 +143,14 @@ def format_arxiv_docs(items: List[dict], max_chars: int) -> str:
             f"Authors: {it.get('authors', '')}\n"
             f"Summary: {tom_tat}"
         )
+        # Chỉ thêm dòng này khi bài THẬT SỰ bị rút -- đa số bài không bị, thêm
+        # dòng "Withdrawn: KHÔNG" cho mọi bài sẽ tốn token vô ích mỗi lần gọi tool.
+        if it.get("withdrawn"):
+            khoi_text += (
+                "\nWithdrawn: CÓ — tác giả đã rút bài này trên arXiv, "
+                "KHÔNG dùng làm căn cứ trả lời"
+            )
+        khoi.append(khoi_text)
     return "\n\n".join(khoi)
 
 
@@ -195,13 +219,21 @@ def tim_openalex(query: str, top_k: int, mailto: str, timeout: float = 10.0) -> 
     payload tra ve, tuc la giam so token phai nhet vao prompt cho LLM so voi
     lay nguyen ban ghi day du cua OpenAlex (co the vai KB/bai).
     Tai lieu: https://docs.openalex.org/api-entities/works
+
+    Them field `is_retracted` (co san trong cung ban ghi, KHONG can goi them
+    request nao) de kiem tra tinh xac thuc: bai bi Retraction Watch xac nhan
+    rut se duoc OpenAlex gan co nay -- day la nguon du lieu mien phi, khong
+    ton them han muc/luot goi API nao ca.
     """
     import requests
 
     params = {
         "search": query,
         "per-page": top_k,
-        "select": "id,doi,title,publication_year,authorships,abstract_inverted_index,cited_by_count",
+        "select": (
+            "id,doi,title,publication_year,authorships,abstract_inverted_index,"
+            "cited_by_count,is_retracted"
+        ),
         "mailto": mailto,
     }
     resp = requests.get("https://api.openalex.org/works", params=params, timeout=timeout)
@@ -223,6 +255,7 @@ def tim_openalex(query: str, top_k: int, mailto: str, timeout: float = 10.0) -> 
                 "authors": tac_gia,
                 "cited_by_count": w.get("cited_by_count", 0),
                 "abstract": _dung_lai_abstract(w.get("abstract_inverted_index")),
+                "is_retracted": bool(w.get("is_retracted", False)),
             }
         )
     return items
@@ -242,7 +275,7 @@ def format_openalex_docs(items: List[dict], max_chars: int) -> str:
             tom_tat = "(khong co abstract)"
         elif len(tom_tat) > phan:
             tom_tat = tom_tat[:phan].rstrip() + "..."
-        khoi.append(
+        khoi_text = (
             f"OpenAlex ID: {it.get('openalex_id', '(khong ro)')}\n"
             f"DOI: {it.get('doi') or '(khong co)'}\n"
             f"Published: {it.get('year', '')}\n"
@@ -251,6 +284,13 @@ def format_openalex_docs(items: List[dict], max_chars: int) -> str:
             f"Cited by: {it.get('cited_by_count', 0)}\n"
             f"Summary: {tom_tat}"
         )
+        # Chỉ thêm dòng này khi bài THẬT SỰ bị rút, lý do xem format_arxiv_docs.
+        if it.get("is_retracted"):
+            khoi_text += (
+                "\nRetracted: CÓ — OpenAlex đánh dấu bài này đã bị RÚT, "
+                "KHÔNG dùng làm căn cứ trả lời"
+            )
+        khoi.append(khoi_text)
     return "\n\n".join(khoi)
 
 

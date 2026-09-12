@@ -6,6 +6,8 @@ chờn thì chạy: pytest -m "not network"
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 from app.core.contracts import ERROR_PREFIX
@@ -16,6 +18,7 @@ from app.agents.research_agent.tools import (
     make_openalex_tool,
     make_wikipedia_tool,
     reset_search_budget,
+    tim_arxiv,
 )
 
 
@@ -253,3 +256,83 @@ def test_ket_qua_openalex_co_kem_openalex_id():
     out = format_openalex_docs(_mot_bai_openalex(), max_chars=1000)
     assert "https://openalex.org/W2741809807" in out
     assert "Cited by: 1234" in out
+
+
+# --------------------------------------------------------------------------- #
+# Xác thực nguồn: cờ retracted (OpenAlex) / withdrawn (arXiv) đọc lại từ chính
+# response đã có, không gọi thêm request nào -- xem app/core/authenticity.py
+# --------------------------------------------------------------------------- #
+def test_openalex_khong_bi_rut_thi_khong_co_dong_retracted():
+    out = format_openalex_docs(_mot_bai_openalex(), max_chars=1000)
+    assert "Retracted" not in out
+
+
+def test_openalex_bi_rut_thi_co_dong_retracted():
+    bai = _mot_bai_openalex()
+    bai[0]["is_retracted"] = True
+    out = format_openalex_docs(bai, max_chars=1000)
+    assert "Retracted: CÓ" in out
+
+
+def test_arxiv_khong_bi_rut_thi_khong_co_dong_withdrawn():
+    out = format_arxiv_docs(_hai_bai(), max_chars=1000)
+    assert "Withdrawn" not in out
+
+
+def test_arxiv_bi_rut_thi_co_dong_withdrawn():
+    bai = _hai_bai()
+    bai[0]["withdrawn"] = True
+    out = format_arxiv_docs(bai, max_chars=1000)
+    assert "Withdrawn: CÓ" in out
+
+
+class _KetQuaArxivGia:
+    """Giả một `arxiv.Result` -- đủ thuộc tính tim_arxiv() đọc tới, không gọi mạng."""
+
+    def __init__(self, entry_id: str, comment: str = "", summary: str = "Tom tat binh thuong"):
+        self.entry_id = entry_id
+        self.published = datetime.datetime(2020, 1, 1)
+        self.updated = datetime.datetime(2020, 2, 1)
+        self.title = "Bai bao gia"
+        self.authors: list = []
+        self.summary = summary
+        self.comment = comment
+
+
+class _TimKiemArxivGia:
+    def __init__(self, ket_qua):
+        self._ket_qua = ket_qua
+
+    def results(self):
+        return self._ket_qua
+
+
+class _WrapperArxivGia:
+    ARXIV_MAX_QUERY_LENGTH = 200
+    top_k_results = 1
+
+    def __init__(self, ket_qua):
+        self._ket_qua = ket_qua
+
+    def is_arxiv_identifier(self, query):
+        return False
+
+    def arxiv_search(self, query, max_results):
+        return _TimKiemArxivGia(self._ket_qua)
+
+
+def test_tim_arxiv_nhan_dien_bai_bi_rut_qua_comment():
+    r = _KetQuaArxivGia(
+        "http://arxiv.org/abs/9999.99999v1",
+        comment="This paper has been withdrawn by the author(s)",
+    )
+    wrapper = _WrapperArxivGia([r])
+    items = tim_arxiv(wrapper, "query")
+    assert items[0]["withdrawn"] is True
+
+
+def test_tim_arxiv_bai_binh_thuong_khong_bi_gan_co():
+    r = _KetQuaArxivGia("http://arxiv.org/abs/1111.11111v1")
+    wrapper = _WrapperArxivGia([r])
+    items = tim_arxiv(wrapper, "query")
+    assert items[0]["withdrawn"] is False

@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visual Agentic AI</title>
+<style>
+  :root{
+    --bg:#0a0c10;
+    --surface:#15181f;
+    --surface-2:#1b1f28;
+    --border:#262b36;
+    --text:#eef0f4;
+    --muted:#868c9c;
+    --glow-a:#3b6cff;
+    --glow-b:#8b5cf6;
+    --supervisor:#9b8cf2;
+    --research:#4fc3a1;
+    --vision:#e8a33d;
+    --danger:#e2685a;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    overflow:hidden;
+  }
+
+  .glow{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:0;
+    background:
+      radial-gradient(480px 320px at 30% 62%, rgba(59,108,255,.16), transparent 70%),
+      radial-gradient(520px 360px at 70% 58%, rgba(139,92,246,.14), transparent 70%);
+    transition:opacity .6s ease;
+  }
+  body.active .glow{opacity:.4;}
+
+  .topbar{
+    position:fixed;top:0;left:0;right:0;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:20px 26px;
+    z-index:5;
+  }
+  .brand{font-size:14px;font-weight:600;color:var(--muted);letter-spacing:.01em;}
+  .brand b{color:var(--text);}
+  .gear-btn{
+    width:34px;height:34px;border-radius:50%;
+    border:1px solid var(--border);background:var(--surface);
+    color:var(--muted);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+  }
+  .gear-btn:hover{color:var(--text);}
+
+  .settings-panel{
+    position:fixed;top:64px;right:26px;
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;width:280px;
+    display:none;z-index:6;
+    box-shadow:0 12px 32px rgba(0,0,0,.4);
+  }
+  .settings-panel.show{display:block;}
+  .settings-panel label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;}
+  .settings-panel input{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);
+    color:var(--text);font-size:12px;padding:8px 10px;border-radius:6px;font-family:inherit;
+  }
+
+  .stage{
+    position:relative;z-index:1;
+    height:100vh;
+    display:flex;flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:0 20px;
+    transition:padding .5s ease;
+  }
+  body.active .stage{justify-content:flex-end;padding-bottom:28px;}
+
+  .greeting{
+    text-align:center;
+    margin-bottom:28px;
+    transition:opacity .35s ease, transform .35s ease, height .35s ease, margin .35s ease;
+    max-width:640px;
+  }
+  .greeting h1{
+    font-size:38px;
+    font-weight:400;
+    color:#d6d9e2;
+    margin:0;
+    line-height:1.25;
+    letter-spacing:-0.01em;
+  }
+  body.active .greeting{
+    opacity:0;
+    height:0;
+    margin:0;
+    transform:translateY(-12px);
+    pointer-events:none;
+    overflow:hidden;
+  }
+
+  .thread{
+    width:100%;
+    max-width:680px;
+    flex:1;
+    overflow-y:auto;
+    display:none;
+    flex-direction:column;
+    gap:22px;
+    padding:88px 4px 20px;
+  }
+  body.active .thread{display:flex;}
+  .thread::-webkit-scrollbar{width:6px;}
+  .thread::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+  .turn{display:flex;flex-direction:column;gap:14px;}
+  .user-bubble{
+    align-self:flex-end;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:16px 16px 4px 16px;
+    padding:11px 16px;
+    font-size:14px;
+    max-width:80%;
+  }
+  .user-bubble img{max-width:160px;border-radius:8px;display:block;margin-top:8px;}
+
+  .route-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px;}
+  .node{
+    display:inline-flex;align-items:center;gap:6px;
+    border:1px solid var(--border);background:var(--surface);
+    border-radius:20px;padding:5px 12px 5px 10px;font-size:12px;font-weight:600;
+  }
+  .node .led{width:7px;height:7px;border-radius:50%;background:currentColor;}
+  .node.supervisor{color:var(--supervisor);}
+  .node.research{color:var(--research);}
+  .node.vision{color:var(--vision);}
+  .arrow{color:var(--border);font-size:13px;}
+
+  .agent-answer{
+    border-left:3px solid var(--border);
+    padding:2px 0 2px 14px;
+    font-size:13px;color:var(--muted);
+  }
+  .agent-answer.research{border-color:var(--research);}
+  .agent-answer.vision{border-color:var(--vision);}
+  .agent-answer .who{font-size:11px;font-weight:600;display:block;margin-bottom:3px;}
+  .agent-answer.research .who{color:var(--research);}
+  .agent-answer.vision .who{color:var(--vision);}
+  .agent-answer .txt{color:var(--text);}
+
+  .final-block{
+    background:var(--surface);border:1px solid var(--border);
+    border-left:3px solid var(--supervisor);border-radius:10px;
+    padding:16px 18px;
+  }
+  .final-block .who{font-size:11px;font-weight:600;color:var(--supervisor);display:block;margin-bottom:6px;}
+  .final-block .txt{font-size:14.5px;white-space:pre-wrap;}
+
+  .extra-block{
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;
+  }
+  .extra-block h2{font-size:11px;color:var(--muted);margin:0 0 8px;font-weight:600;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:12px;}
+  .chip b{color:var(--vision);}
+  .extra-block img{max-width:100%;border-radius:8px;display:block;}
+
+  .warn{border:1px solid #4a3320;background:#241a10;color:#e0b787;border-radius:10px;padding:12px 14px;font-size:12.5px;}
+  .err-bubble{
+    align-self:flex-start;
+    border:1px solid #4a2420;background:#241412;color:#f0a89e;
+    border-radius:10px;padding:12px 14px;font-size:13px;max-width:80%;
+  }
+
+  .pulse-dots{display:flex;gap:4px;padding:6px 2px;}
+  .pulse-dots span{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite ease-in-out;}
+  .pulse-dots span:nth-child(2){animation-delay:.2s;}
+  .pulse-dots span:nth-child(3){animation-delay:.4s;}
+  @keyframes blink{0%,80%,100%{opacity:.25;}40%{opacity:1;}}
+
+  .bar-wrap{width:100%;max-width:680px;position:relative;z-index:2;}
+  .filechip{
+    display:none;align-items:center;gap:8px;
+    background:var(--surface-2);border:1px solid var(--border);
+    border-radius:20px;padding:5px 8px 5px 12px;font-size:12px;color:var(--muted);
+    margin-bottom:8px;width:fit-content;
+  }
+  .filechip.show{display:inline-flex;}
+  .filechip button{
+    background:none;border:none;color:var(--muted);cursor:pointer;
+    width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;
+  }
+  .filechip button:hover{background:var(--border);color:var(--text);}
+
+  .bar{
+    display:flex;align-items:center;gap:6px;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:28px;padding:8px 8px 8px 8px;
+    box-shadow:0 8px 28px rgba(0,0,0,.35);
+  }
+  .icon-btn{
+    width:38px;height:38px;min-width:38px;border-radius:50%;
+    border:none;background:transparent;color:var(--muted);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px;
+  }
+  .icon-btn:hover{background:var(--surface-2);color:var(--text);}
+  .bar input[type="text"]{
+    flex:1;background:transparent;border:none;color:var(--text);
+    font-size:15px;font-family:inherit;padding:8px 4px;outline:none;
+  }
+  .bar input[type="text"]::placeholder{color:var(--muted);}
+  .send-btn{
+    width:38px;height:38px;min-width:38px;border-radius:50%;
+    border:none;background:var(--text);color:var(--bg);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;
+  }
+  .send-btn:disabled{opacity:.4;cursor:default;}
+  #file-input{display:none;}
+</style>
+</head>
+<body>
+
+<div class="glow"></div>
+
+<div class="topbar">
+  <div class="brand"><b>Visual Agentic AI</b> · Supervisor</div>
+  <button class="gear-btn" id="gear-btn" title="Cài đặt" type="button">&#9881;</button>
+</div>
+
+<div class="settings-panel" id="settings-panel">
+  <label for="api-base">Địa chỉ API</label>
+  <input type="url" id="api-base" value="http://127.0.0.1:8000">
+</div>
+
+<div class="stage" id="stage">
+
+  <div class="greeting" id="greeting">
+    <h1>Đặt câu hỏi bất kỳ —<br>Supervisor sẽ tự tìm đúng agent giúp bạn.</h1>
+  </div>
+
+  <div class="thread" id="thread"></div>
+
+  <div class="bar-wrap">
+    <div class="filechip" id="filechip">
+      <span id="filechip-name"></span>
+      <button type="button" id="filechip-remove">&times;</button>
+    </div>
+    <form class="bar" id="form">
+      <button type="button" class="icon-btn" id="attach-btn" title="Đính kèm ảnh">+</button>
+      <input type="file" id="file-input" accept=".png,.jpg,.jpeg,.webp,.bmp">
+      <input type="text" id="question" placeholder="Nhắn Supervisor..." autocomplete="off">
+      <button type="submit" class="send-btn" id="send-btn">&uarr;</button>
+    </form>
+  </div>
+
+</div>
+
+<script>
+const AGENT_LABEL = { research_agent: "Research Agent", vision_agent: "Vision Agent" };
+const AGENT_CLASS = { research_agent: "research", vision_agent: "vision" };
+
+const gearBtn = document.getElementById("gear-btn");
+const settingsPanel = document.getElementById("settings-panel");
+const apiBaseInput = document.getElementById("api-base");
+const attachBtn = document.getElementById("attach-btn");
+const fileInput = document.getElementById("file-input");
+const filechip = document.getElementById("filechip");
+const filechipName = document.getElementById("filechip-name");
+const filechipRemove = document.getElementById("filechip-remove");
+const form = document.getElementById("form");
+const questionInput = document.getElementById("question");
+const sendBtn = document.getElementById("send-btn");
+const thread = document.getElementById("thread");
+
+gearBtn.addEventListener("click", () => settingsPanel.classList.toggle("show"));
+attachBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]){
+    filechipName.textContent = fileInput.files[0].name;
+    filechip.classList.add("show");
+  }
+});
+filechipRemove.addEventListener("click", () => {
+  fileInput.value = "";
+  filechip.classList.remove("show");
+});
+
+function escapeHtml(str){
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function nodeHtml(cls, label){
+  return `<span class="node ${cls}"><span class="led"></span>${label}</span>`;
+}
+
+function routeHtml(agentsUsed){
+  let html = nodeHtml("supervisor", "Supervisor");
+  if (!agentsUsed.length){
+    html += `<span class="arrow">&rarr;</span>` + nodeHtml("supervisor", "Tự trả lời");
+  } else {
+    agentsUsed.forEach(name => {
+      html += `<span class="arrow">&rarr;</span>` + nodeHtml(AGENT_CLASS[name] || "", AGENT_LABEL[name] || name);
+    });
+    html += `<span class="arrow">&rarr;</span>` + nodeHtml("supervisor", "Tổng hợp");
+  }
+  return `<div class="route-row">${html}</div>`;
+}
+
+function resultHtml(data){
+  let html = "";
+  if (data.warnings && data.warnings.length){
+    html += `<div class="warn">${data.warnings.join("<br>")}</div>`;
+  }
+  html += routeHtml(data.agents_used || []);
+
+  const answers = data.agent_answers || {};
+  (data.agents_used || []).forEach(name => {
+    if (!answers[name]) return;
+    html += `<div class="agent-answer ${AGENT_CLASS[name] || ""}">
+      <span class="who">${AGENT_LABEL[name] || name}</span>
+      <span class="txt">${escapeHtml(answers[name])}</span>
+    </div>`;
+  });
+
+  html += `<div class="final-block">
+    <span class="who">Supervisor</span>
+    <div class="txt">${escapeHtml(data.answer || "(không có nội dung trả về)")}</div>
+  </div>`;
+
+  if (data.counting && Object.keys(data.counting).length){
+    const chips = Object.entries(data.counting)
+      .map(([n, c]) => `<span class="chip"><b>${c}</b> ${escapeHtml(n)}</span>`).join("");
+    html += `<div class="extra-block"><h2>Số lượng đếm được</h2><div class="chips">${chips}</div></div>`;
+  }
+  if (data.annotated_image_base64){
+    html += `<div class="extra-block"><h2>Ảnh đã khoanh vùng</h2><img src="data:image/jpeg;base64,${data.annotated_image_base64}" alt="Ảnh khoanh vùng vật thể"></div>`;
+  }
+  return html;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = questionInput.value.trim();
+  if (!question) return;
+
+  document.body.classList.add("active");
+
+  const apiBase = apiBaseInput.value.replace(/\/$/, "");
+  const file = fileInput.files[0] || null;
+  const fileUrl = file ? URL.createObjectURL(file) : null;
+
+  const turn = document.createElement("div");
+  turn.className = "turn";
+  turn.innerHTML = `
+    <div class="user-bubble">
+      ${escapeHtml(question)}
+      ${fileUrl ? `<img src="${fileUrl}" alt="Ảnh đính kèm">` : ""}
+    </div>
+    <div class="pulse-dots"><span></span><span></span><span></span></div>
+  `;
+  thread.appendChild(turn);
+  thread.scrollTop = thread.scrollHeight;
+
+  const body = new FormData();
+  body.append("question", question);
+  if (file) body.append("file", file);
+
+  questionInput.value = "";
+  fileInput.value = "";
+  filechip.classList.remove("show");
+  sendBtn.disabled = true;
+
+  try {
+    const res = await fetch(apiBase + "/api/ask", { method: "POST", body });
+    const data = await res.json();
+    const pulses = turn.querySelector(".pulse-dots");
+    if (!res.ok){
+      pulses.outerHTML = `<div class="err-bubble">${escapeHtml(data.detail || ("Lỗi server (mã " + res.status + ").")) }</div>`;
+    } else {
+      pulses.outerHTML = resultHtml(data);
+    }
+  } catch (err) {
+    const pulses = turn.querySelector(".pulse-dots");
+    pulses.outerHTML = `<div class="err-bubble">Không kết nối được tới API (${apiBase}). Kiểm tra server có đang chạy không.</div>`;
+  } finally {
+    sendBtn.disabled = false;
+    thread.scrollTop = thread.scrollHeight;
+  }
+});
+</script>
+</body>
+</html>

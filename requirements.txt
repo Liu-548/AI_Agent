@@ -43,6 +43,13 @@ pillow>=10.0
 # --- Dev ---
 pytest>=8.0
 
+# --- Web API (app/api.py) ---
+# Wraps the agents in FastAPI for the web UI. Needed to run:
+#   uvicorn app.api:app --reload --port 8000
+fastapi==0.121.0
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+
 # --- Vision only: install separately, ~2GB because of torch ---
 # Only the person owning the Vision Agent needs it:
 #   pip install ultralytics==8.3.108

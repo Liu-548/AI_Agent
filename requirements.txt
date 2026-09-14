@@ -20,7 +20,6 @@ langchain-community==0.4.2
 langchain-text-splitters==1.1.2
 langgraph==1.2.11
 langgraph-prebuilt==1.1.0
-langgraph-supervisor==0.0.31
 
 # --- LLM providers ---
 # Native Google endpoint. REQUIRED for the new "AQ." keys AND for Gemini 3

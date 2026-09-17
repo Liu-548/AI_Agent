@@ -5,34 +5,66 @@ nhung ham CLI (app/main.py) da dung - build_vision_agent(), graph.invoke(),
 final_text(), tool_error contract, ...  Neu QUY_TAC_THIET_KE.md doi cach cac
 ham do hoat dong thi file nay cung phai doi theo, khong tu y sua logic agent.
 
+LUU TRU HOI THOAI (tang nay tu quan ly, agent khong biet gi ve no):
+mot cau hoi khong con dung mot minh. /api/ask nhan them conversation_id, doc
+lai vai luot gan nhat tu database (app/store.py) roi gui kem cho graph -> nguoi
+dung bam vao hoi thoai cu hoi tiep thi agent van hieu "con ben trai" hay "bai
+bao do" dang noi ve cai gi.
+
 Chay thu (tu goc repo, sau khi da kich hoat .venv):
 
-    pip install fastapi "uvicorn[standard]" python-multipart
+    pip install -r requirements.txt
     uvicorn app.api:app --reload --port 8000
 
-Sau do mo http://127.0.0.1:8000/docs de test bang Swagger UI truoc khi noi
-frontend that vao.
+Mo http://127.0.0.1:8000 de dung web UI, hoac /docs de test bang Swagger UI.
 """
 
 from __future__ import annotations
 
 import base64
+import io
 import json
+import re
 import tempfile
+import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
+from app import store
 from app.core.config import settings
 from app.core.pretty import message_text
 
-app = FastAPI(title="Visual Agentic AI - API", version="0.1.0")
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
-# TODO: sieet lai allow_origins khi trien khai that (vd domain cua frontend),
-# "*" chi de tien phat trien cuc bo.
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Mo ket noi database + tao bang ngay luc khoi dong.
+
+    Lam o day thay vi doi request dau tien: neu chuoi DATABASE_URL sai thi log
+    bao ngay luc deploy, khong phai doi den luc nguoi dung bam gui roi moi thay
+    loi 500 kho hieu. Loi khong lam sap app - cac endpoint khong dung lich su
+    (vd /api/vision) van chay duoc.
+    """
+    try:
+        store.get_engine()
+        print(f"[store] san sang: {settings.mo_ta_database()}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[store] KHONG ket noi duoc database: {exc}")
+    yield
+
+
+app = FastAPI(title="Visual Agentic AI - API", version="0.2.0", lifespan=lifespan)
+
+# Web UI duoc chinh FastAPI phuc vu (xem endpoint "/" o cuoi file) nen thuc te
+# la cung origin, khong can CORS. Van giu "*" de ai muon mo file HTML truc tiep
+# tu o dia hay host frontend rieng van goi duoc.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,11 +77,15 @@ MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8MB - tu choi truoc khi ton luot goi LLM
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "visual_agentic_ai_uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+# Anh upload KHONG bi xoa ngay sau request nua: nguoi dung con hoi tiep ve dung
+# buc anh do o luot sau. Doi lai phai tu don, neu khong o dia server day dan.
+GIU_ANH_GIAY = 24 * 3600
+# Anh thu nho luu kem tin nhan de mo lai hoi thoai cu van thay anh da gui.
+THUMBNAIL_MAX_PX = 360
+
 # Build agent DUNG MOT LAN cho ca tien trinh uvicorn, khong build lai moi
 # request - YOLO/LLM client se duoc tai su dung giua cac request thay vi nap
 # lai tu dau (dieu khong the co duoc voi CLI vi CLI thoat sau moi lan chay).
-# Ca 3 agent (vision, research, supervisor) deu duoc cache rieng - endpoint
-# nao khong bi goi thi khong bi build, dung 1 lan cho cai dau tien can den.
 _vision_graph = None
 _research_graph = None
 _supervisor_graph = None
@@ -85,6 +121,20 @@ def _get_supervisor_graph():
     return _supervisor_graph
 
 
+# --------------------------------------------------------------------------- #
+# Anh upload
+# --------------------------------------------------------------------------- #
+def _don_anh_cu() -> None:
+    """Xoa anh qua han. Goi moi lan co upload moi - du de o dia khong phinh."""
+    han = time.time() - GIU_ANH_GIAY
+    for f in UPLOAD_DIR.glob("*"):
+        try:
+            if f.is_file() and f.stat().st_mtime < han:
+                f.unlink(missing_ok=True)
+        except OSError:
+            pass  # file dang bi tien trinh khac giu - bo qua, lan sau don tiep
+
+
 def _save_upload(file: UploadFile) -> Path:
     """Luu file upload vao thu muc tam, kiem tra duoi va dung luong truoc."""
     ext = Path(file.filename or "").suffix.lower()
@@ -95,6 +145,7 @@ def _save_upload(file: UploadFile) -> Path:
             f"Chi nhan: {sorted(ALLOWED_EXTS)}",
         )
 
+    _don_anh_cu()
     dest = UPLOAD_DIR / f"{uuid.uuid4().hex}{ext}"
     size = 0
     with dest.open("wb") as out:
@@ -114,6 +165,28 @@ def _save_upload(file: UploadFile) -> Path:
     return dest
 
 
+def _thumbnail_base64(path: Path) -> str:
+    """Anh thu nho dang base64 de luu kem tin nhan.
+
+    Khong luu anh goc: mot anh dien thoai 4MB nhan doi thanh ~5.5MB base64,
+    vai chuc cau hoi la day database mien phi. Ban thu nho ~20-40KB.
+    """
+    try:
+        from PIL import Image
+
+        with Image.open(path) as im:
+            im = im.convert("RGB")
+            im.thumbnail((THUMBNAIL_MAX_PX, THUMBNAIL_MAX_PX))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=72)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:  # noqa: BLE001 - thieu anh xem truoc khong dang lam hong request
+        return ""
+
+
+# --------------------------------------------------------------------------- #
+# Doc ket qua graph
+# --------------------------------------------------------------------------- #
 def _final_answer(result: dict) -> str:
     """Cau tra loi cuoi cung tu ket qua graph.invoke().
 
@@ -198,6 +271,35 @@ def _extract_agent_trace(result: dict):
     return agents_used, agent_answers
 
 
+# Ma loi -> cau tieng Viet nguoi dung cuoi doc hieu ngay, khong can biet ten tool.
+# Dong bo voi ma loi that su duoc tra ve trong app/agents/*/tools.py.
+_TEN_LOI_DE_HIEU = {
+    "YOLO_NOT_INSTALLED": "Server chua cai thu vien dem vat the (YOLO)",
+    "NO_IMAGE_REF": "Khong tim thay duong dan/URL anh trong cau hoi",
+    "IMAGE_UNREADABLE": "Khong doc duoc anh (sai duong dan, URL hong, hoac khong phai file anh)",
+    "YOLO_INFERENCE_FAILED": "Model dem vat the xu ly anh bi loi",
+    "VISION_LLM_FAILED": "Model doc anh gap loi",
+    "VISION_EMPTY": "Model doc anh khong tra ve noi dung",
+    "ARXIV_UNAVAILABLE": "Khong tra cuu duoc arXiv luc nay",
+    "WIKIPEDIA_UNAVAILABLE": "Khong tra cuu duoc Wikipedia luc nay",
+    "EMPTY_QUERY": "Thieu noi dung de tim kiem",
+}
+_MA_LOI_RE = re.compile(r"^ERROR:\s*([A-Z_]+)\s*\|\s*(.*)$", re.DOTALL)
+
+
+def _canh_bao_de_doc(ten_tool: str, text: str) -> str:
+    """Doi 'ERROR: MA | chi tiet' (dinh dang noi bo cua tool_error) thanh cau
+    nguoi dung cuoi doc hieu ngay tren giao dien, khong phai dan ky thuat vien.
+    Khong doi GI trong contract cua tool (van la tool_error() nhu cu) - day chi
+    la lop hien thi rieng cua API, giu nguyen o app/api.py."""
+    khop = _MA_LOI_RE.match(text or "")
+    if not khop:
+        return f"{ten_tool}: {text}"
+    ma, chi_tiet = khop.groups()
+    tieu_de = _TEN_LOI_DE_HIEU.get(ma, ma)
+    return f"{tieu_de}: {chi_tiet}" if chi_tiet else tieu_de
+
+
 def _loi_ro_rang(exc: Exception) -> str:
     """Rut gon cac loi hay gap thanh cau tra ve doc duoc cho frontend, cung
     nhom loi voi _giai_thich_loi trong app/main.py nhung ngan hon vi day la
@@ -212,6 +314,60 @@ def _loi_ro_rang(exc: Exception) -> str:
     return f"Loi khi chay agent: {msg}"
 
 
+# --------------------------------------------------------------------------- #
+# Lich su -> ngu canh cho graph
+# --------------------------------------------------------------------------- #
+def _lich_su_cho_graph(conversation_id: str) -> List[dict]:
+    """Vai luot hoi-dap gan nhat, dang message de ghep vao dau graph.invoke().
+
+    Day la thu lam nen "hoi tiep khong bi gian doan". Ba diem can luu y:
+
+    1. CHI lay phan chu. Anh thu nho, so lieu dem, trace agent nam trong
+       `extras` va bi bo lai - nhoi anh base64 vao lich su la cach nhanh nhat
+       de no gioi han token va an loi 400 cua Groq.
+    2. Duong dan anh cu duoc gan lai vao cau hoi NEU file con ton tai, de agent
+       co the nhin lai dung buc anh do. File da bi don (hoac server vua restart)
+       thi bo qua - agent van con phan mo ta chinh no viet o luot truoc.
+    3. So luot bi chan boi HISTORY_MAX_TURNS. Moi luot gui lai lam tang token
+       cho MOI lan goi LLM cua luot moi, khong phai chi mot lan.
+    """
+    so_luot = settings.history_max_turns
+    if so_luot <= 0:
+        return []
+
+    tat_ca = store.lay_tin_nhan(conversation_id)
+    gan_nhat = tat_ca[-(so_luot * 2) :]
+
+    ket_qua: List[dict] = []
+    for m in gan_nhat:
+        noi_dung = (m.get("content") or "").strip()
+        if not noi_dung:
+            continue
+        if m.get("role") == "user":
+            duong_dan = (m.get("extras") or {}).get("image_path")
+            if duong_dan and Path(duong_dan).exists():
+                noi_dung = f"{noi_dung}\nImage: {duong_dan}"
+        ket_qua.append({"role": m["role"], "content": noi_dung})
+    return ket_qua
+
+
+def _kiem_tra_user(user_id: str) -> str:
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="Thieu user_id.")
+    return uid[:64]
+
+
+def _bat_buoc_co_hoi_thoai(conversation_id: str, user_id: str) -> dict:
+    hoi_thoai = store.lay_hoi_thoai(conversation_id, user_id)
+    if hoi_thoai is None:
+        raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
+    return hoi_thoai
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint - tien ich
+# --------------------------------------------------------------------------- #
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
@@ -223,6 +379,56 @@ def config():
     return {"config": settings.mo_ta_cau_hinh()}
 
 
+# --------------------------------------------------------------------------- #
+# Endpoint - lich su hoi thoai
+# --------------------------------------------------------------------------- #
+@app.get("/api/conversations")
+def list_conversations(user_id: str):
+    """Danh sach hoi thoai cua mot nguoi: ghim len truoc, roi toi moi nhat."""
+    uid = _kiem_tra_user(user_id)
+    return {"conversations": store.danh_sach_hoi_thoai(uid)}
+
+
+@app.get("/api/conversations/{conversation_id}")
+def get_conversation(conversation_id: str, user_id: str):
+    """Toan bo tin nhan cua mot hoi thoai - dung khi bam vao no o sidebar."""
+    uid = _kiem_tra_user(user_id)
+    hoi_thoai = _bat_buoc_co_hoi_thoai(conversation_id, uid)
+    hoi_thoai["messages"] = store.lay_tin_nhan(conversation_id)
+    return hoi_thoai
+
+
+@app.patch("/api/conversations/{conversation_id}")
+def update_conversation(
+    conversation_id: str,
+    user_id: str = Form(...),
+    title: Optional[str] = Form(None),
+    pinned: Optional[bool] = Form(None),
+):
+    """Doi ten hoac ghim/bo ghim mot hoi thoai."""
+    uid = _kiem_tra_user(user_id)
+    _bat_buoc_co_hoi_thoai(conversation_id, uid)
+    if title is not None:
+        ten = title.strip()
+        if not ten:
+            raise HTTPException(status_code=400, detail="Tieu de khong duoc de trong.")
+        store.doi_ten_hoi_thoai(conversation_id, uid, ten)
+    if pinned is not None:
+        store.ghim_hoi_thoai(conversation_id, uid, pinned)
+    return store.lay_hoi_thoai(conversation_id, uid)
+
+
+@app.delete("/api/conversations/{conversation_id}")
+def delete_conversation(conversation_id: str, user_id: str):
+    uid = _kiem_tra_user(user_id)
+    if not store.xoa_hoi_thoai(conversation_id, uid):
+        raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
+    return {"deleted": conversation_id}
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint - chay agent
+# --------------------------------------------------------------------------- #
 @app.post("/api/vision")
 def ask_vision(
     file: UploadFile = File(..., description="Anh PNG/JPG/JPEG/WEBP/BMP"),
@@ -233,8 +439,8 @@ def ask_vision(
 ):
     """Nhan 1 anh upload + 1 cau hoi -> chay thang vision_agent, tra JSON.
 
-    Co y KHONG di qua supervisor de tiet kiem luot Groq + Gemini (xem README,
-    muc "Dang sua code thi chay -v thay vi qua supervisor").
+    Co y KHONG di qua supervisor de tiet kiem luot Groq + Gemini, va co y KHONG
+    luu lich su - day la endpoint de debug rieng vision agent.
 
     Ham nay khai bao `def` (khong phai `async def`) CO CHU DICH: graph.invoke()
     va doc/ghi file la cac thao tac dong (blocking), FastAPI se tu chay no
@@ -260,7 +466,9 @@ def ask_vision(
         _extract_vision_extras(tool_outputs, response)
 
         warnings = [
-            f"{name}: {text}" for name, text in tool_outputs.items() if text.startswith("ERROR:")
+            _canh_bao_de_doc(name, text)
+            for name, text in tool_outputs.items()
+            if text.startswith("ERROR:")
         ]
         if warnings:
             response["warnings"] = warnings
@@ -278,9 +486,8 @@ def ask_vision(
 def ask_research(
     question: str = Form(..., description="Cau hoi tim kiem hoc thuat, vd 'rotary positional encoding'"),
 ):
-    """Chay thang research_agent (arXiv + OpenAlex + Wikipedia), khong qua
-    supervisor - tiet kiem 2 luot dieu phoi cho moi cau hoi (xem README, muc
-    "Dang sua code thi chay -r/-v thay vi qua supervisor")."""
+    """Chay thang research_agent (arXiv + Wikipedia), khong qua supervisor -
+    tiet kiem 2 luot dieu phoi cho moi cau hoi. Khong luu lich su."""
     try:
         graph = _get_research_graph()
         run_config = {"recursion_limit": settings.recursion_limit}
@@ -292,7 +499,9 @@ def ask_research(
 
         response: dict = {"answer": answer}
         warnings = [
-            f"{name}: {text}" for name, text in tool_outputs.items() if text.startswith("ERROR:")
+            _canh_bao_de_doc(name, text)
+            for name, text in tool_outputs.items()
+            if text.startswith("ERROR:")
         ]
         if warnings:
             response["warnings"] = warnings
@@ -304,15 +513,28 @@ def ask_research(
 @app.post("/api/ask")
 def ask_supervisor(
     question: str = Form(..., description="Cau hoi bat ky - supervisor tu chon agent con phu hop"),
+    user_id: str = Form("", description="Id ngau nhien trinh duyet tu sinh, de tach lich su"),
+    conversation_id: str = Form("", description="De trong = mo hoi thoai moi"),
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
     ),
 ):
-    """Di qua Supervisor: LLM tu quyet dinh giao viec cho vision_agent va/hoac
-    research_agent, roi tong hop cau tra loi. Ton nhieu luot goi LLM hon 2
-    endpoint tren (xem README, bang "Luot LLM") - dung khi cau hoi thuc su can
-    ca 2 agent (vd: hoi ve mot khai niem duoc minh hoa trong anh)."""
-    saved_path = None
+    """Di qua Supervisor, co nho ngu canh cua chinh hoi thoai do.
+
+    Luong chay:
+      1. Khong co conversation_id -> tao hoi thoai moi, dat ten theo cau hoi dau.
+      2. Doc vai luot gan nhat cua hoi thoai do tu database.
+      3. Ghep lich su + cau hoi moi roi dua vao graph -> agent hieu ngu canh.
+      4. Luu ca cau hoi lan cau tra loi xuong database.
+
+    user_id de trong -> van tra loi binh thuong nhung KHONG luu gi (giu tuong
+    thich cho ai dang goi API kieu cu).
+    """
+    uid = (user_id or "").strip()[:64]
+    luu_lich_su = bool(uid)
+    saved_path: Optional[Path] = None
+    hoi_thoai: Optional[dict] = None
+
     try:
         if file is not None and file.filename:
             saved_path = _save_upload(file)
@@ -320,10 +542,19 @@ def ask_supervisor(
         else:
             message = question
 
+        lich_su: List[dict] = []
+        if luu_lich_su:
+            if conversation_id:
+                hoi_thoai = _bat_buoc_co_hoi_thoai(conversation_id, uid)
+                lich_su = _lich_su_cho_graph(conversation_id)
+            else:
+                hoi_thoai = store.tao_hoi_thoai(uid, store.dat_tieu_de(question))
+
         graph = _get_supervisor_graph()
         run_config = {"recursion_limit": settings.recursion_limit}
         result = graph.invoke(
-            {"messages": [{"role": "user", "content": message}]}, config=run_config
+            {"messages": lich_su + [{"role": "user", "content": message}]},
+            config=run_config,
         )
         answer = _final_answer(result)
         tool_outputs = _collect_tool_outputs(result)
@@ -335,15 +566,48 @@ def ask_supervisor(
         _extract_vision_extras(tool_outputs, response)
 
         warnings = [
-            f"{name}: {text}" for name, text in tool_outputs.items() if text.startswith("ERROR:")
+            _canh_bao_de_doc(name, text)
+            for name, text in tool_outputs.items()
+            if text.startswith("ERROR:")
         ]
         if warnings:
             response["warnings"] = warnings
+
+        if luu_lich_su and hoi_thoai is not None:
+            cid = hoi_thoai["id"]
+            extras_user: dict = {}
+            if saved_path is not None:
+                # image_path de luot sau con nhin lai dung buc anh;
+                # image_thumb_base64 de mo lai hoi thoai cu van thay anh da gui.
+                extras_user["image_path"] = str(saved_path)
+                anh_nho = _thumbnail_base64(saved_path)
+                if anh_nho:
+                    extras_user["image_thumb_base64"] = anh_nho
+            store.them_tin_nhan(cid, "user", question, extras_user)
+            store.them_tin_nhan(
+                cid,
+                "assistant",
+                answer,
+                {k: v for k, v in response.items() if k != "answer"},
+            )
+            response["conversation_id"] = cid
+            response["title"] = hoi_thoai["title"]
+
         return response
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
-    finally:
-        if saved_path is not None:
-            saved_path.unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------- #
+# Web UI - de FastAPI phuc vu luon trang web
+# --------------------------------------------------------------------------- #
+# Mot dia chi duy nhat cho ca API lan giao dien: gui mot link la ca lop vao test
+# duoc, va vi cung origin nen khong con chuyen trinh duyet chan CORS.
+@app.get("/", include_in_schema=False)
+def trang_chu():
+    trang = WEB_DIR / "UI_style.html"
+    if not trang.is_file():
+        raise HTTPException(status_code=404, detail="Chua co web/UI_style.html")
+    return FileResponse(trang)

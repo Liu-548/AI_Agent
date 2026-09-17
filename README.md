@@ -160,6 +160,31 @@ pytest tests/test_contract.py   # chỉ kiểm tra hợp đồng chung của nh�
 Toàn bộ test end-to-end dùng **model giả** trong `tests/fakes.py`, nên chạy test
 không tốn một đồng token nào.
 
+## Giao diện web
+
+Ngoài CLI, hệ thống có một giao diện web với lịch sử hội thoại: bấm vào một
+hội thoại cũ rồi hỏi tiếp thì agent vẫn nhớ đoạn trước đó.
+
+```bash
+uvicorn app.api:app --reload --port 8000
+```
+
+Mở <http://127.0.0.1:8000>. Trang web và API dùng chung một địa chỉ nên không
+phải cấu hình gì thêm; `/docs` là Swagger UI để thử từng endpoint.
+
+| Phần | File | Ghi chú |
+|---|---|---|
+| Giao diện | `web/UI_style.html` | một file, không phụ thuộc CDN nào |
+| API | `app/api.py` | bọc quanh agent, không sửa logic agent |
+| Lưu hội thoại | `app/store.py` | SQLite khi dev, Postgres khi deploy |
+
+Mặc định lịch sử lưu vào SQLite (`conversations.db`, đã `.gitignore`). Khi
+deploy **bắt buộc** trỏ `DATABASE_URL` sang Postgres bên ngoài, vì Render xoá
+sạch ổ đĩa mỗi lần restart — xem [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+Số lượt hỏi-đáp cũ gửi lại cho agent do `HISTORY_MAX_TURNS` quyết định (mặc
+định 6). Càng cao thì agent nhớ càng lâu nhưng mỗi lượt càng tốn token.
+
 ## Kiến trúc thư mục
 
 Toàn bộ hệ thống nằm trong **một folder tổng `app/`**; phần thiết lập môi trường

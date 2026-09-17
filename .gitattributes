@@ -1,0 +1,13 @@
+# Chuan hoa line ending cho ca nhom: luu trong Git luon la LF.
+# Ly do co file nay: moi nguoi dung Windows/Mac khac nhau lam CRLF/LF lech nhau,
+# khien git diff bao "sua 40 file" trong khi thuc te chi sua vai dong that su.
+* text=auto
+
+# File nhi phan - KHONG duoc dong bo line ending (se hong file neu dong bo)
+*.onnx binary
+*.pt binary
+*.pth binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.db binary

@@ -195,6 +195,21 @@ class Settings:
     # --- Runtime ---
     recursion_limit: int = field(default_factory=lambda: _env_int("RECURSION_LIMIT", 50))
 
+    # --- Lưu trữ hội thoại (chỉ web UI dùng, CLI không đụng tới) ---
+    #
+    # Để TRỐNG -> dùng file SQLite ngay trong repo (dev trên máy, không cần mạng).
+    # Khi deploy PHẢI trỏ sang Postgres ngoài, vì Render free tier xoá sạch ổ đĩa
+    # mỗi lần restart/deploy: file SQLite nằm trên server sẽ bốc hơi cùng lịch sử
+    # hội thoại của người dùng. Dạng chuỗi:
+    #   postgresql+psycopg://user:pass@host/dbname?sslmode=require
+    database_url: str = field(default_factory=lambda: _env("DATABASE_URL"))
+
+    # Số LƯỢT hỏi-đáp cũ được gửi lại cho agent khi người dùng hỏi tiếp trong một
+    # hội thoại. Đây là dây phanh chi phí: mỗi lượt gửi lại là thêm token cho MỌI
+    # lần gọi LLM của lượt mới (supervisor + agent con + tổng hợp). Để quá cao vừa
+    # đốt hạn mức vừa dễ dính 400 output_parse_failed vì hội thoại phình to.
+    history_max_turns: int = field(default_factory=lambda: _env_int("HISTORY_MAX_TURNS", 6))
+
     # ----------------------------------------------------------------- #
     # Tách "provider:model" và lấy key tương ứng
     # ----------------------------------------------------------------- #
@@ -275,6 +290,19 @@ class Settings:
             return f"OpenAI key (sk-), {len(k)} ký tự"
         return f"không rõ định dạng, {len(k)} ký tự"
 
+    def mo_ta_database(self) -> str:
+        """Mô tả nơi lưu hội thoại, KHÔNG in mật khẩu trong chuỗi kết nối."""
+        raw = self.database_url
+        if not raw:
+            return "sqlite (mặc định, file trong repo) — KHÔNG bền khi deploy"
+        if "://" not in raw:
+            return "chuỗi DATABASE_URL sai định dạng"
+        scheme, _, phan_con_lai = raw.partition("://")
+        # Chuỗi Postgres có dạng user:mat_khau@host/db — cắt lấy phần sau '@'
+        # để không bao giờ in mật khẩu ra màn hình hay log.
+        host = phan_con_lai.split("@")[-1].split("/")[0]
+        return f"{scheme} @ {host}" if host else f"{scheme} (file cục bộ)"
+
     def mo_ta_cau_hinh(self) -> str:
         """Bảng tóm tắt vai trò -> provider/model, dùng cho `--config`."""
         dong = []
@@ -301,6 +329,7 @@ class Settings:
         dong.append(f"  python : {sys.executable}")
         trong_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
         dong.append(f"  venv   : {'có' if trong_venv else 'KHÔNG (đang dùng Python hệ thống)'}")
+        dong.append(f"  db     : {self.mo_ta_database()}")
         if DOTENV_LOADED:
             dong.append(f"  .env   : đã nạp ({DOTENV_PATH})")
         elif DOTENV_PROBLEM:

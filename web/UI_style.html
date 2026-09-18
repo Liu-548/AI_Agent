@@ -1418,6 +1418,10 @@ async function xoa(id) {
      Man hinh dang nhap CHI hien khi nguoi dung tu bam nut dang nhap. */
   if (state.loginRequired && !state.user) luuPhieu("");
 
+  /* Bat man hinh chao NGAY tu dau. Truoc day chi `hoiThoaiMoi()` goi ham nay,
+     nen lan dau vao trang thieu class `center`: khoi chao dinh sat mep tren,
+     de lai mot khoang trong lon phia duoi. */
+  hienManChao(true);
   veChanTrang();
   napDanhSach();
 })();

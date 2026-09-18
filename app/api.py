@@ -664,8 +664,10 @@ def ask_supervisor(
             if conversation_id:
                 hoi_thoai = _bat_buoc_co_hoi_thoai(conversation_id, uid)
                 lich_su = _lich_su_cho_graph(conversation_id)
-            else:
-                hoi_thoai = store.tao_hoi_thoai(uid, store.dat_tieu_de(question))
+            # Hoi thoai moi: CHUA tao trong database o day. Tao som roi lo agent
+            # loi giua chung (vd Gemini qua tai 503) se de lai mot hoi thoai
+            # rong khong co tin nhan nao, hien trong sidebar nhung mo ra trong
+            # trơn. Doi den luc chac chan co cau tra loi moi tao (xem ben duoi).
 
         graph = _get_supervisor_graph()
         run_config = {"recursion_limit": settings.recursion_limit}
@@ -690,7 +692,10 @@ def ask_supervisor(
         if warnings:
             response["warnings"] = warnings
 
-        if luu_lich_su and hoi_thoai is not None:
+        if luu_lich_su:
+            if hoi_thoai is None:
+                # Hoi thoai moi: chi tao khi da chac chan co cau tra loi de luu.
+                hoi_thoai = store.tao_hoi_thoai(uid, store.dat_tieu_de(question))
             cid = hoi_thoai["id"]
             extras_user: dict = {}
             if saved_path is not None:

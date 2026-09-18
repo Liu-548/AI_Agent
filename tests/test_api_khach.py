@@ -172,3 +172,36 @@ def test_chua_bat_dang_nhap_thi_van_luu_theo_ma_trinh_duyet(monkeypatch, tmp_pat
 
     ds = client.get("/api/conversations?user_id=ma_trinh_duyet").json()["conversations"]
     assert len(ds) == 1
+
+
+# ------------------------- agent loi giua chung ----------------------------- #
+class _GraphGiaLoi:
+    """Gia lap agent bi loi (vd Gemini 503 qua tai) sau khi da nhan cau hoi."""
+
+    @staticmethod
+    def invoke(state, config=None):
+        raise RuntimeError("503 UNAVAILABLE: model qua tai (gia lap)")
+
+
+def test_nguoi_dang_nhap_agent_loi_khong_de_lai_hoi_thoai_rong(monkeypatch, tmp_path):
+    """Bug that: hoi thoai duoc tao truoc khi goi agent, agent loi giua chung thi
+    hoi thoai rong (0 tin nhan) van con trong database, hien trong sidebar nhung
+    mo ra trong khong. Phai dam bao KHONG con hoi thoai rong nao sau khi loi."""
+    api_mod, auth_mod, store_mod = _nap(monkeypatch, tmp_path)
+    monkeypatch.setattr(api_mod, "_get_supervisor_graph", lambda: _GraphGiaLoi)
+    client = TestClient(api_mod.app)
+
+    r = client.post(
+        "/api/ask",
+        data={"question": "Cau hoi se loi"},
+        headers=_bearer(auth_mod, A),
+    )
+    assert r.status_code == 502
+
+    from sqlalchemy import func, select
+
+    with store_mod.get_engine().begin() as conn:
+        so_hoi_thoai = conn.execute(
+            select(func.count()).select_from(store_mod.conversations)
+        ).scalar()
+    assert so_hoi_thoai == 0, "Agent loi khong duoc de lai hoi thoai rong trong database"

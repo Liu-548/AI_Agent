@@ -350,6 +350,13 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   background:color-mix(in srgb,var(--danger) 10%,transparent);
   color:var(--danger);border-radius:11px;padding:11px 14px;font-size:13px;
 }
+.err .thu-lai{
+  margin-top:10px;border:1px solid color-mix(in srgb,var(--danger) 45%,transparent);
+  background:transparent;color:var(--danger);cursor:pointer;
+  font-family:inherit;font-size:12.5px;font-weight:600;
+  padding:6px 14px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;
+}
+.err .thu-lai:hover{background:color-mix(in srgb,var(--danger) 16%,transparent);}
 
 .dots{display:flex;gap:5px;padding:7px 2px;align-items:center;}
 .dots span{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.3s infinite ease-in-out;}
@@ -1153,7 +1160,21 @@ async function gui(cauHoi, file) {
     datTieuDeTren();
   } catch (e) {
     const dots = turn.querySelector(".dots");
-    if (dots) dots.outerHTML = '<div class="err">' + escapeHtml(e.message) + "</div>";
+    if (dots) {
+      /* Phan lon loi o day la tam thoi (model qua tai, mang chap chon). Dung
+         nut nay thi khong phai go lai cau hoi va chon lai anh - `cauHoi` va
+         `file` van con nguyen trong bo nho. */
+      const hop = document.createElement("div");
+      hop.className = "err";
+      hop.appendChild(Object.assign(document.createElement("div"), { textContent: e.message }));
+      const nut = document.createElement("button");
+      nut.type = "button";
+      nut.className = "thu-lai";
+      nut.textContent = "Thử lại";
+      nut.onclick = () => { turn.remove(); gui(cauHoi, file); };
+      hop.appendChild(nut);
+      dots.replaceWith(hop);
+    }
   } finally {
     clearInterval(nhip);
     state.sending = false;

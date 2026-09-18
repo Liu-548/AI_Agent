@@ -305,6 +305,16 @@ def _loi_ro_rang(exc: Exception) -> str:
     nhom loi voi _giai_thich_loi trong app/main.py nhung ngan hon vi day la
     JSON tra ve API chu khong phai text in ra console."""
     msg = str(exc)
+    # 503/UNAVAILABLE/overloaded = may chu cua nha cung cap dang qua tai, KHONG
+    # phai loi cua nguoi dung va cung khong phai het han muc. SDK cua Google da
+    # tu thu lai 6 lan (1s -> 16s) truoc khi nem ra den day, nen khong retry
+    # them o server nua: bao that ro va de nguoi dung bam "Thu lai" khi muon.
+    if "503" in msg or "UNAVAILABLE" in msg or "overloaded" in msg.lower():
+        return (
+            "May chu cua model dang qua tai (bao loi 503). Day la su co tam thoi "
+            "ben phia nha cung cap, khong phai loi cau hoi cua ban - bam Thu lai "
+            "sau vai giay."
+        )
     if "RESOURCE_EXHAUSTED" in msg or "rate_limit" in msg or "429" in msg:
         return "Da het han muc mien phi cua model hom nay. Thu lai sau hoac doi model trong .env."
     if "API key not valid" in msg or "API_KEY_INVALID" in msg or "invalid_api_key" in msg:

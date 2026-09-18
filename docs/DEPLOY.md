@@ -365,11 +365,13 @@ Lưu lại → Render tự deploy lại → vào link, sẽ thấy màn hình đ
 | Trạng thái | Khi nào | Người dùng làm được gì |
 |---|---|---|
 | **Ẩn danh** (chưa bật đăng nhập) | `GOOGLE_CLIENT_ID` để trống | Hỏi đáp bình thường, lịch sử lưu theo **từng trình duyệt** — đổi máy là mất |
-| **Khách vãng lai** (đã bật đăng nhập, chưa đăng nhập) | Bấm "Dùng thử không cần đăng nhập" ở màn hình đăng nhập | Hỏi đáp bình thường nhưng **không lưu gì cả**; có dải nhắc và nút "Đăng nhập để lưu" |
+| **Khách vãng lai** (đã bật đăng nhập, chưa đăng nhập) | Mặc định khi mới vào — web **không chặn ai ở cửa** | Hỏi đáp bình thường nhưng **không lưu gì cả**; có dải nhắc và nút "Đăng nhập để lưu" |
 | **Đã đăng nhập** | Đăng nhập bằng Google | Lịch sử lưu theo **tài khoản Google**, mở ở máy nào cũng thấy; không ai xem được của ai |
 
-Chọn "dùng thử" xong thì lần sau vào không bị hỏi lại nữa (ghi nhớ trong trình
-duyệt), nhưng vẫn đăng nhập được bất cứ lúc nào bằng nút ở góc thanh bên trái.
+Màn hình đăng nhập **chỉ hiện khi người dùng tự bấm** nút đăng nhập (ở góc thanh
+bên trái, hoặc nút "Đăng nhập để lưu" trong dải nhắc) — vào web lần đầu là thấy
+khung chat luôn, hỏi được ngay. Trong màn hình đăng nhập luôn có lối thoát "Để
+sau, dùng thử trước" để quay lại.
 
 Lịch sử của khách vãng lai **không** được giữ lại rồi gộp vào tài khoản sau khi
 đăng nhập — vì ngay từ đầu nó đã không được ghi xuống database.

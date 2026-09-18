@@ -628,7 +628,7 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
     <div class="gbtn" id="gbtn"></div>
     <div class="err" id="login-err"></div>
     <div class="khach">
-      <button type="button" id="btn-khach">Dùng thử không cần đăng nhập →</button>
+      <button type="button" id="btn-khach">Để sau, dùng thử trước →</button>
     </div>
   </div>
 </div>
@@ -648,7 +648,6 @@ const AGENT_LABEL = { research_agent: "Research Agent", vision_agent: "Vision Ag
 const AGENT_CLASS = { research_agent: "research", vision_agent: "vision" };
 
 const LS_TOKEN = "vaai_token";
-const LS_KHACH = "vaai_dung_thu";
 
 const state = {
   userId: "",
@@ -657,7 +656,6 @@ const state = {
   user: null,
   loginRequired: false,
   clientId: "",
-  khach: false,
   conversations: [],
   currentId: null,
   sending: false,
@@ -753,11 +751,9 @@ function veChanTrang() {
   $("nhac-dang-nhap").classList.toggle("show", state.loginRequired && !state.user);
 }
 
-/* Chon dung thu: nho lai de lan sau vao khong bi hoi lai, nhung van doi duoc y
-   bat cu luc nao bang nut dang nhap o thanh ben. */
-function chonDungThu() {
-  state.khach = true;
-  try { localStorage.setItem(LS_KHACH, "1"); } catch (e) {}
+/* Dong man hinh dang nhap, quay lai dung thu. Khong ghi nho gi ca: man hinh
+   nay chi hien khi nguoi dung TU BAM nut dang nhap, nen khong co gi de nho. */
+function dongManDangNhap() {
   hienChanDangNhap(false);
   veChanTrang();
   napDanhSach();
@@ -777,11 +773,8 @@ function dangXuat(giuNguyenManHinh) {
   $("thread").innerHTML = "";
   $("conv-list").innerHTML = "";
   veChanTrang();
-  state.khach = false;
-  try { localStorage.removeItem(LS_KHACH); } catch (e) {}
-  if (state.loginRequired) {
-    moManDangNhap();
-  }
+  hienChanDangNhap(false);
+  napDanhSach();
   if (!giuNguyenManHinh) toast("Đã đăng xuất.");
 }
 
@@ -794,8 +787,6 @@ async function nhanTokenGoogle(resp) {
     const data = await api("/api/auth/google", { method: "POST", body: body });
     luuPhieu(data.token);
     state.user = data.user;
-    state.khach = false;
-    try { localStorage.removeItem(LS_KHACH); } catch (e) {}
     hienChanDangNhap(false);
     veChanTrang();
     await napDanhSach();
@@ -1205,7 +1196,7 @@ function ganSuKien() {
   $("btn-logout").onclick = () => dangXuat(false);
   $("btn-login").onclick = moManDangNhap;
   $("btn-nhac-dang-nhap").onclick = moManDangNhap;
-  $("btn-khach").onclick = chonDungThu;
+  $("btn-khach").onclick = dongManDangNhap;
 
   $("btn-theme").onclick = () => {
     const moi = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
@@ -1419,18 +1410,10 @@ async function xoa(id) {
   state.clientId = me.client_id || "";
   state.user = me.user || null;
 
-  try { state.khach = localStorage.getItem(LS_KHACH) === "1"; } catch (e) {}
-
-  if (state.loginRequired && !state.user) {
-    luuPhieu("");
-    veChanTrang();
-    /* Da tung chon dung thu -> vao thang, khong chan lai mot lan nua. Chua chon
-       bao gio -> hien man hinh dang nhap, trong do van co loi ra "dung thu". */
-    if (!state.khach) {
-      moManDangNhap();
-      return;
-    }
-  }
+  /* Vao thang, khong chan ai o cua. Chua dang nhap thi la khach: van hoi dap
+     duoc, chi khong luu lich su - dai nhac trong khung chat noi ro dieu do.
+     Man hinh dang nhap CHI hien khi nguoi dung tu bam nut dang nhap. */
+  if (state.loginRequired && !state.user) luuPhieu("");
 
   veChanTrang();
   napDanhSach();

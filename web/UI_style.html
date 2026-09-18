@@ -195,11 +195,13 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 }
 .login-card .khach button:hover{color:var(--text);background:var(--hover,rgba(127,127,127,.12));}
 
-/* Dai nhac o dau khung chat khi dang dung thu */
+/* Dai nhac khi dang dung thu. Nam NGOAI vung cuon, ngay duoi thanh tieu de:
+   dat trong vung cuon thi man hinh chao (.scroll.center) canh giua lam no bi
+   cat mat mep tren, va no cung troi mat khi cuon hoi thoai dai. */
 .nhac-dang-nhap{
-  display:none;align-items:center;gap:10px;flex-wrap:wrap;
-  margin:0 auto 14px;max-width:var(--maxw,760px);
-  padding:10px 14px;border:1px dashed var(--border);border-radius:12px;
+  display:none;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:9px 18px;border-bottom:1px solid var(--border-soft);
+  background:var(--bg);z-index:19;
   font-size:12.5px;color:var(--muted);line-height:1.5;
 }
 .nhac-dang-nhap.show{display:flex;}
@@ -521,11 +523,12 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
     <div class="title" id="top-title"><span>Cuộc trò chuyện mới</span></div>
   </div>
 
+  <div class="nhac-dang-nhap" id="nhac-dang-nhap">
+    <span>Bạn đang dùng thử — hỏi đáp bình thường, nhưng <b>lịch sử sẽ không được lưu</b>.</span>
+    <button type="button" id="btn-nhac-dang-nhap">Đăng nhập để lưu</button>
+  </div>
+
   <div class="scroll" id="scroll">
-    <div class="nhac-dang-nhap" id="nhac-dang-nhap">
-      <span>Bạn đang dùng thử — hỏi đáp bình thường, nhưng <b>lịch sử sẽ không được lưu</b>.</span>
-      <button type="button" id="btn-nhac-dang-nhap">Đăng nhập để lưu</button>
-    </div>
     <div class="welcome" id="welcome">
       <div class="halo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">

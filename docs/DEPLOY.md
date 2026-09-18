@@ -360,7 +360,21 @@ Vào service → **Environment** → thêm:
 
 Lưu lại → Render tự deploy lại → vào link, sẽ thấy màn hình đăng nhập.
 
-### 9.4. Những điều cần biết khi dùng
+### 9.4. Ba trạng thái của web
+
+| Trạng thái | Khi nào | Người dùng làm được gì |
+|---|---|---|
+| **Ẩn danh** (chưa bật đăng nhập) | `GOOGLE_CLIENT_ID` để trống | Hỏi đáp bình thường, lịch sử lưu theo **từng trình duyệt** — đổi máy là mất |
+| **Khách vãng lai** (đã bật đăng nhập, chưa đăng nhập) | Bấm "Dùng thử không cần đăng nhập" ở màn hình đăng nhập | Hỏi đáp bình thường nhưng **không lưu gì cả**; có dải nhắc và nút "Đăng nhập để lưu" |
+| **Đã đăng nhập** | Đăng nhập bằng Google | Lịch sử lưu theo **tài khoản Google**, mở ở máy nào cũng thấy; không ai xem được của ai |
+
+Chọn "dùng thử" xong thì lần sau vào không bị hỏi lại nữa (ghi nhớ trong trình
+duyệt), nhưng vẫn đăng nhập được bất cứ lúc nào bằng nút ở góc thanh bên trái.
+
+Lịch sử của khách vãng lai **không** được giữ lại rồi gộp vào tài khoản sau khi
+đăng nhập — vì ngay từ đầu nó đã không được ghi xuống database.
+
+### 9.5. Những điều cần biết khi dùng
 
 - **Tắt lúc nào cũng được**: xoá rỗng `GOOGLE_CLIENT_ID` là web quay về chế độ ẩn
   danh, code không phải sửa gì. Nhờ vậy ai trong nhóm chưa kịp tạo Client ID vẫn

@@ -358,8 +358,15 @@ def _kiem_tra_user(user_id: str) -> str:
     return uid[:64]
 
 
-def _danh_tinh(authorization: Optional[str], user_id: str = "") -> str:
-    """Ai dang goi? Tra ve dinh danh dung de tach lich su.
+def _lay_phieu(authorization: Optional[str]) -> str:
+    """Tach phan phieu ra khoi header `Authorization: Bearer <phieu>`."""
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return ""
+
+
+def _danh_tinh_tuy_chon(authorization: Optional[str], user_id: str = "") -> str:
+    """Ai dang goi? Tra ve chuoi RONG neu la khach chua dang nhap.
 
     Hai che do, quyet dinh boi cau hinh cua server chu KHONG phai boi client:
 
@@ -369,18 +376,30 @@ def _danh_tinh(authorization: Optional[str], user_id: str = "") -> str:
         bang cach doi mot chuoi.
       - Chua bat dang nhap: giu nguyen kieu cu, moi trinh duyet mot ma ngau
         nhien. Nho vay ai trong nhom chua cau hinh OAuth van chay duoc local.
+
+    Chuoi rong co nghia "khach vang lai": van hoi agent duoc, nhung khong co cho
+    nao de luu lich su, va cung khong doc duoc lich su cua ai.
     """
     if not settings.dang_nhap_bat():
-        return _kiem_tra_user(user_id)
+        return (user_id or "").strip()[:64]
 
-    phieu = ""
-    if authorization and authorization.lower().startswith("bearer "):
-        phieu = authorization[7:].strip()
+    ruot = auth.doc_phieu(_lay_phieu(authorization))
+    return str(ruot["sub"])[:64] if ruot else ""
 
-    ruot = auth.doc_phieu(phieu)
-    if not ruot:
-        raise HTTPException(status_code=401, detail="Can dang nhap lai.")
-    return str(ruot["sub"])[:64]
+
+def _danh_tinh(authorization: Optional[str], user_id: str = "") -> str:
+    """Nhu tren nhung BAT BUOC phai co danh tinh.
+
+    Dung cho cac endpoint dong vao mot hoi thoai co that (mo, doi ten, ghim,
+    xoa) - nhung viec ma khach vang lai khong the lam vi ho khong so huu hoi
+    thoai nao.
+    """
+    uid = _danh_tinh_tuy_chon(authorization, user_id)
+    if not uid:
+        if settings.dang_nhap_bat():
+            raise HTTPException(status_code=401, detail="Can dang nhap lai.")
+        raise HTTPException(status_code=400, detail="Thieu user_id.")
+    return uid
 
 
 def _bat_buoc_co_hoi_thoai(conversation_id: str, user_id: str) -> dict:
@@ -452,8 +471,15 @@ def toi_la_ai(authorization: Optional[str] = Header(None)):
 
 @app.get("/api/conversations")
 def list_conversations(user_id: str = "", authorization: Optional[str] = Header(None)):
-    """Danh sach hoi thoai cua mot nguoi: ghim len truoc, roi toi moi nhat."""
-    uid = _danh_tinh(authorization, user_id)
+    """Danh sach hoi thoai cua mot nguoi: ghim len truoc, roi toi moi nhat.
+
+    Khach chua dang nhap khong co hoi thoai nao -> tra danh sach rong. Tra rong
+    thay vi bao loi de giao dien cua khach khong phai hien mot thong bao do ma
+    ho chang lam gi duoc.
+    """
+    uid = _danh_tinh_tuy_chon(authorization, user_id)
+    if not uid:
+        return {"conversations": []}
     return {"conversations": store.danh_sach_hoi_thoai(uid)}
 
 
@@ -608,12 +634,10 @@ def ask_supervisor(
     user_id de trong -> van tra loi binh thuong nhung KHONG luu gi (giu tuong
     thich cho ai dang goi API kieu cu).
     """
-    if settings.dang_nhap_bat():
-        # Da bat dang nhap -> bat buoc co phieu hop le, va luon luu lich su theo
-        # tai khoan Google chu khong theo chuoi client tu khai.
-        uid = _danh_tinh(authorization)
-    else:
-        uid = (user_id or "").strip()[:64]
+    # Khach vang lai (uid rong) VAN hoi duoc agent, chi khong luu lai gi. Day la
+    # cho duy nhat trong ca file cho phep goi ma khong co danh tinh: dung thu
+    # phai de dang, con lich su thi phai co chu.
+    uid = _danh_tinh_tuy_chon(authorization, user_id)
     luu_lich_su = bool(uid)
     saved_path: Optional[Path] = None
     hoi_thoai: Optional[dict] = None

@@ -186,6 +186,29 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 .login-card .err{
   margin-top:14px;font-size:12.5px;color:var(--danger,#e5484d);line-height:1.5;
 }
+.login-card .khach{
+  margin-top:18px;padding-top:16px;border-top:1px solid var(--border);
+}
+.login-card .khach button{
+  background:transparent;border:none;color:var(--muted);cursor:pointer;
+  font-size:13px;font-family:inherit;padding:6px 10px;border-radius:8px;
+}
+.login-card .khach button:hover{color:var(--text);background:var(--hover,rgba(127,127,127,.12));}
+
+/* Dai nhac o dau khung chat khi dang dung thu */
+.nhac-dang-nhap{
+  display:none;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:0 auto 14px;max-width:var(--maxw,760px);
+  padding:10px 14px;border:1px dashed var(--border);border-radius:12px;
+  font-size:12.5px;color:var(--muted);line-height:1.5;
+}
+.nhac-dang-nhap.show{display:flex;}
+.nhac-dang-nhap button{
+  margin-left:auto;border:1px solid var(--border);background:var(--surface);
+  color:var(--text);cursor:pointer;font-size:12.5px;font-family:inherit;
+  padding:5px 12px;border-radius:999px;white-space:nowrap;
+}
+.nhac-dang-nhap button:hover{border-color:var(--supervisor);}
 
 /* popup menu cua mot hoi thoai */
 .menu{
@@ -473,6 +496,9 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   <div class="side-foot">
     <img class="avatar" id="avatar" alt="" referrerpolicy="no-referrer">
     <div class="who" id="who">—</div>
+    <button class="icon-btn" id="btn-login" title="Đăng nhập để lưu lịch sử" type="button" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
+    </button>
     <button class="icon-btn" id="btn-logout" title="Đăng xuất" type="button" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
     </button>
@@ -496,6 +522,10 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   </div>
 
   <div class="scroll" id="scroll">
+    <div class="nhac-dang-nhap" id="nhac-dang-nhap">
+      <span>Bạn đang dùng thử — hỏi đáp bình thường, nhưng <b>lịch sử sẽ không được lưu</b>.</span>
+      <button type="button" id="btn-nhac-dang-nhap">Đăng nhập để lưu</button>
+    </div>
     <div class="welcome" id="welcome">
       <div class="halo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -597,6 +627,9 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
     <p>Đăng nhập bằng Google để xem lại lịch sử trò chuyện của bạn trên bất kỳ máy nào.</p>
     <div class="gbtn" id="gbtn"></div>
     <div class="err" id="login-err"></div>
+    <div class="khach">
+      <button type="button" id="btn-khach">Dùng thử không cần đăng nhập →</button>
+    </div>
   </div>
 </div>
 
@@ -615,6 +648,7 @@ const AGENT_LABEL = { research_agent: "Research Agent", vision_agent: "Vision Ag
 const AGENT_CLASS = { research_agent: "research", vision_agent: "vision" };
 
 const LS_TOKEN = "vaai_token";
+const LS_KHACH = "vaai_dung_thu";
 
 const state = {
   userId: "",
@@ -623,6 +657,7 @@ const state = {
   user: null,
   loginRequired: false,
   clientId: "",
+  khach: false,
   conversations: [],
   currentId: null,
   sending: false,
@@ -692,17 +727,46 @@ function hienChanDangNhap(hien) {
 
 function veChanTrang() {
   const anh = $("avatar");
-  const nut = $("btn-logout");
+  const nutRa = $("btn-logout");
+  const nutVao = $("btn-login");
+
   if (state.user) {
     $("who").textContent = state.user.name || state.user.email || "Đã đăng nhập";
     if (state.user.picture) { anh.src = state.user.picture; anh.style.display = "block"; }
     else { anh.style.display = "none"; }
-    nut.style.display = "";
+    nutRa.style.display = "";
+    nutVao.style.display = "none";
+  } else if (state.loginRequired) {
+    /* Khach vang lai: noi thang la khong luu, va de san mot loi moi dang nhap. */
+    $("who").textContent = "Chưa đăng nhập";
+    anh.style.display = "none";
+    nutRa.style.display = "none";
+    nutVao.style.display = "";
   } else {
     $("who").textContent = "Mã của bạn: " + state.userId.slice(0, 8);
     anh.style.display = "none";
-    nut.style.display = "none";
+    nutRa.style.display = "none";
+    nutVao.style.display = "none";
   }
+
+  /* Dai nhac chi hien khi server CO bat dang nhap ma nguoi dung chon dung thu. */
+  $("nhac-dang-nhap").classList.toggle("show", state.loginRequired && !state.user);
+}
+
+/* Chon dung thu: nho lai de lan sau vao khong bi hoi lai, nhung van doi duoc y
+   bat cu luc nao bang nut dang nhap o thanh ben. */
+function chonDungThu() {
+  state.khach = true;
+  try { localStorage.setItem(LS_KHACH, "1"); } catch (e) {}
+  hienChanDangNhap(false);
+  veChanTrang();
+  napDanhSach();
+}
+
+function moManDangNhap() {
+  $("login-err").textContent = "";
+  hienChanDangNhap(true);
+  napNutGoogle();
 }
 
 function dangXuat(giuNguyenManHinh) {
@@ -713,9 +777,10 @@ function dangXuat(giuNguyenManHinh) {
   $("thread").innerHTML = "";
   $("conv-list").innerHTML = "";
   veChanTrang();
+  state.khach = false;
+  try { localStorage.removeItem(LS_KHACH); } catch (e) {}
   if (state.loginRequired) {
-    hienChanDangNhap(true);
-    napNutGoogle();
+    moManDangNhap();
   }
   if (!giuNguyenManHinh) toast("Đã đăng xuất.");
 }
@@ -729,6 +794,8 @@ async function nhanTokenGoogle(resp) {
     const data = await api("/api/auth/google", { method: "POST", body: body });
     luuPhieu(data.token);
     state.user = data.user;
+    state.khach = false;
+    try { localStorage.removeItem(LS_KHACH); } catch (e) {}
     hienChanDangNhap(false);
     veChanTrang();
     await napDanhSach();
@@ -1136,6 +1203,9 @@ function ganSuKien() {
   $("btn-new").onclick = hoiThoaiMoi;
   $("search").oninput = renderSidebar;
   $("btn-logout").onclick = () => dangXuat(false);
+  $("btn-login").onclick = moManDangNhap;
+  $("btn-nhac-dang-nhap").onclick = moManDangNhap;
+  $("btn-khach").onclick = chonDungThu;
 
   $("btn-theme").onclick = () => {
     const moi = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
@@ -1349,12 +1419,17 @@ async function xoa(id) {
   state.clientId = me.client_id || "";
   state.user = me.user || null;
 
+  try { state.khach = localStorage.getItem(LS_KHACH) === "1"; } catch (e) {}
+
   if (state.loginRequired && !state.user) {
     luuPhieu("");
     veChanTrang();
-    hienChanDangNhap(true);
-    napNutGoogle();
-    return;
+    /* Da tung chon dung thu -> vao thang, khong chan lai mot lan nua. Chua chon
+       bao gio -> hien man hinh dang nhap, trong do van co loi ra "dung thu". */
+    if (!state.khach) {
+      moManDangNhap();
+      return;
+    }
   }
 
   veChanTrang();

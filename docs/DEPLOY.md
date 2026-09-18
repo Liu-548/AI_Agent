@@ -296,6 +296,84 @@ Trước khi đẩy repo lên GitHub công khai:
 
 ---
 
+## 9. Đăng nhập bằng Google (mỗi người thấy lịch sử của mình)
+
+Không bật phần này thì web vẫn chạy, nhưng lịch sử gắn với **từng trình duyệt**:
+đổi máy, đổi trình duyệt, hoặc xoá dữ liệu duyệt web là coi như mất. Bật lên thì
+giống Gemini/ChatGPT — đăng nhập ở máy nào cũng thấy đúng lịch sử của mình, và
+không ai đọc được hội thoại của người khác.
+
+### 9.1. Lấy Client ID ở Google Cloud Console (làm một lần, miễn phí)
+
+1. Vào <https://console.cloud.google.com/> → tạo project mới (tên tuỳ ý).
+2. Menu trái → **APIs & Services** → **OAuth consent screen**:
+   - User type: **External** → Create.
+   - Điền App name, User support email, Developer contact email → Save.
+   - Phần **Audience**: để **Testing** cũng chạy được, nhưng chỉ những email bạn
+     thêm vào danh sách *Test users* mới đăng nhập được (tối đa 100). Muốn cả
+     lớp/cả nhóm ai cũng vào được thì bấm **Publish app**.
+3. Menu trái → **Credentials** → **Create credentials** → **OAuth client ID**:
+   - Application type: **Web application**.
+   - **Authorized JavaScript origins** — thêm ĐỦ cả hai dòng:
+     - `http://localhost:8000`
+     - `https://<tên-app>.onrender.com`  ← đúng link Render của bạn, **không có
+       dấu `/` ở cuối**
+   - Bấm **Create** → copy chuỗi **Client ID** (đuôi
+     `.apps.googleusercontent.com`).
+
+> Thiếu đúng origin là lỗi hay gặp nhất: nút đăng nhập hiện ra nhưng bấm vào
+> không có gì xảy ra, console báo `origin_mismatch`. Thêm origin xong phải đợi
+> khoảng 1–2 phút mới có hiệu lực.
+
+### 9.2. Khai báo ở máy mình (chạy local)
+
+Trong file `.env`:
+
+```
+GOOGLE_CLIENT_ID=<chuoi-vua-copy>.apps.googleusercontent.com
+SESSION_SECRET=<chuoi-ngau-nhien-tu-sinh>
+SESSION_DAYS=30
+```
+
+Sinh `SESSION_SECRET` bằng lệnh:
+
+```
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Kiểm tra đã nhận chưa: `python -m app.main --config` → dòng `login :` phải ghi
+`Google (mỗi người thấy lịch sử của mình)`.
+
+> **`SESSION_SECRET` là bí mật thật sự.** Ai biết nó có thể tự ký một tấm phiếu
+> mang tên người khác và đọc toàn bộ lịch sử của họ. Không commit, không dán vào
+> chat nhóm. Ngược lại `GOOGLE_CLIENT_ID` là công khai — nó nằm sẵn trong HTML
+> gửi xuống trình duyệt, lộ cũng không sao.
+
+### 9.3. Khai báo trên Render
+
+Vào service → **Environment** → thêm:
+
+| Biến | Giá trị |
+|---|---|
+| `GOOGLE_CLIENT_ID` | chuỗi Client ID vừa tạo |
+| `SESSION_SECRET` | Render **tự sinh sẵn** (`generateValue: true` trong `render.yaml`), không cần điền |
+
+Lưu lại → Render tự deploy lại → vào link, sẽ thấy màn hình đăng nhập.
+
+### 9.4. Những điều cần biết khi dùng
+
+- **Tắt lúc nào cũng được**: xoá rỗng `GOOGLE_CLIENT_ID` là web quay về chế độ ẩn
+  danh, code không phải sửa gì. Nhờ vậy ai trong nhóm chưa kịp tạo Client ID vẫn
+  chạy local bình thường.
+- **Đổi `SESSION_SECRET` = đăng xuất toàn bộ người dùng** (mọi phiếu cũ thành vô
+  hiệu). Đây cũng là cách xử lý nếu lỡ làm lộ khoá.
+- **Lịch sử ẩn danh cũ không tự chuyển sang tài khoản Google.** Chúng vẫn nằm
+  trong database dưới mã ẩn danh cũ, chỉ là không ai đăng nhập vào xem được nữa.
+- Người dùng đăng nhập được lưu tên/email/ảnh đại diện trong bảng `users` để hiển
+  thị ở góc thanh bên. Xoá bảng này không làm mất hội thoại của ai.
+
+---
+
 ## Tra lỗi nhanh
 
 | Thấy gì | Nguyên nhân | Sửa |
@@ -306,6 +384,10 @@ Trước khi đẩy repo lên GitHub công khai:
 | Lịch sử mất sau vài ngày | Đang dùng SQLite hoặc Postgres của Render | Chuyển sang Neon (mục 1) |
 | `server closed the connection unexpectedly` | Kết nối nhàn rỗi bị Neon ngắt | Đã xử lý bằng `pool_pre_ping`; nếu còn, deploy lại |
 | Deploy bị kill, log ghi `Out of memory` | Đang chạy YOLO bằng torch | Đặt `YOLO_WEIGHTS=yolo11n.onnx` (mục 6) |
+| Bấm nút đăng nhập Google không có phản ứng | Origin chưa khai báo đúng | Thêm ĐÚNG link (không có `/` cuối) vào Authorized JavaScript origins, đợi 1–2 phút |
+| `Can dang nhap lai` (401) liên tục | `SESSION_SECRET` đổi giữa chừng, hoặc mỗi lần deploy lại sinh khoá mới | Đặt `SESSION_SECRET` cố định trong Environment của Render |
+| Nút đăng nhập không hiện, báo không tải được | Máy không vào được `accounts.google.com` | Kiểm tra mạng/tường lửa; hoặc bỏ trống `GOOGLE_CLIENT_ID` để chạy ẩn danh |
+| Đăng nhập xong không thấy hội thoại cũ | Hội thoại cũ thuộc mã ẩn danh trước đây | Đúng như thiết kế — lịch sử ẩn danh không tự chuyển sang tài khoản Google |
 | Không thấy khối "Ảnh đã khoanh vùng" | Thiếu `DRAW_DETECTIONS=true`, hoặc chưa restart sau khi sửa | Thêm biến rồi deploy lại |
 | `Chưa cài onnxruntime` | Cài thiếu gói | `pip install -r requirements.txt` |
 | Giao diện báo "đã hết hạn mức" | Hết lượt của một model | `python -m app.main --models` rồi đổi dòng `MODEL_*` |

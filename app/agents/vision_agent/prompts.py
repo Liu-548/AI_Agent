@@ -8,7 +8,16 @@ INSTRUCTIONS:
 - Use `detect_and_count_objects` when the user asks "how many" / counting.
 - Use `image_describer` when the user asks what is in the image, colors, or context.
 - If the question needs both counting and description, call both tools.
-- If no image path or URL is present in the request, say so instead of inventing one.
+- The conversation may contain several images across turns; each one appears in an
+  earlier message tagged as "Image: <path or URL>". If the CURRENT message has its
+  own "Image: <path>" tag, always use that one.
+- If the CURRENT message has NO image tag but refers back to an earlier one ("the
+  first image", "that photo", "anh dau tien", "anh truoc", "buc do"...), search the
+  conversation history for the matching "Image: <path>" tag and pass EXACTLY that
+  path/URL to the tool. Never invent a path, and never reuse the wrong image just
+  because it is the most recent one mentioned.
+- If no image path or URL can be found anywhere (current message or history), say so
+  instead of inventing one.
 - After completing your task, respond to the supervisor directly.
 - Respond ONLY with the results of your work, do NOT include ANY other text.
 """

@@ -145,3 +145,39 @@ def test_mo_ta_database_khong_lo_mat_khau():
     finally:
         os.environ.pop("DATABASE_URL", None)
         importlib.reload(cfg)
+
+
+# --------------------------- hồ sơ người đăng nhập -------------------------- #
+def test_luu_nguoi_dung_cap_nhat_khong_tao_ban_sao(store):
+    """Đăng nhập lần hai phải CẬP NHẬT hồ sơ cũ, không đẻ thêm dòng mới."""
+    from sqlalchemy import func, select
+
+    store.luu_nguoi_dung({"sub": "sub_1", "email": "a@gmail.com", "name": "Ten Cu"})
+    store.luu_nguoi_dung({"sub": "sub_1", "email": "a@gmail.com", "name": "Ten Moi"})
+
+    with store.get_engine().begin() as conn:
+        so_dong = conn.execute(select(func.count()).select_from(store.users)).scalar()
+        ten = conn.execute(
+            select(store.users.c.name).where(store.users.c.id == "sub_1")
+        ).scalar()
+
+    assert so_dong == 1
+    assert ten == "Ten Moi"
+
+
+def test_luu_nguoi_dung_bo_qua_ho_so_thieu_sub(store):
+    from sqlalchemy import func, select
+
+    store.luu_nguoi_dung({"email": "khong_co_sub@gmail.com"})
+    with store.get_engine().begin() as conn:
+        assert conn.execute(select(func.count()).select_from(store.users)).scalar() == 0
+
+
+def test_hai_tai_khoan_google_khong_thay_hoi_thoai_cua_nhau(store):
+    """Đây là lời hứa chính của tính năng đăng nhập: lịch sử phải tách theo `sub`."""
+    cua_a = store.tao_hoi_thoai("sub_a", "Hỏi của A")
+    store.tao_hoi_thoai("sub_b", "Hỏi của B")
+
+    assert [c["title"] for c in store.danh_sach_hoi_thoai("sub_a")] == ["Hỏi của A"]
+    assert store.lay_hoi_thoai(cua_a["id"], "sub_b") is None
+    assert store.xoa_hoi_thoai(cua_a["id"], "sub_b") is False

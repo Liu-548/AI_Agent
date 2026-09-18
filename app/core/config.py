@@ -210,6 +210,19 @@ class Settings:
     # đốt hạn mức vừa dễ dính 400 output_parse_failed vì hội thoại phình to.
     history_max_turns: int = field(default_factory=lambda: _env_int("HISTORY_MAX_TURNS", 6))
 
+    # --- Đăng nhập bằng Google (tuỳ chọn) ---
+    # Client ID lấy ở Google Cloud Console. Đây là giá trị CÔNG KHAI, nằm ngay
+    # trong HTML gửi xuống trình duyệt — không phải bí mật, không cần giấu.
+    google_client_id: str = field(default_factory=lambda: _env("GOOGLE_CLIENT_ID"))
+
+    # Khoá để KÝ phiếu đăng nhập của chính hệ thống này (không phải của Google).
+    # Đây MỚI là bí mật: ai biết nó có thể tự ký phiếu và mạo danh người khác.
+    # Để trống -> tắt đăng nhập, web chạy chế độ ẩn danh như cũ.
+    session_secret: str = field(default_factory=lambda: _env("SESSION_SECRET"))
+
+    # Số ngày một lần đăng nhập còn hiệu lực trước khi phải đăng nhập lại.
+    session_days: int = field(default_factory=lambda: _env_int("SESSION_DAYS", 30))
+
     # ----------------------------------------------------------------- #
     # Tách "provider:model" và lấy key tương ứng
     # ----------------------------------------------------------------- #
@@ -303,6 +316,22 @@ class Settings:
         host = phan_con_lai.split("@")[-1].split("/")[0]
         return f"{scheme} @ {host}" if host else f"{scheme} (file cục bộ)"
 
+    def dang_nhap_bat(self) -> bool:
+        """Chỉ bật đăng nhập khi có ĐỦ cả hai: Client ID để hỏi Google người này
+        là ai, và khoá bí mật để tự ký phiếu đăng nhập. Thiếu một trong hai mà
+        vẫn bật thì hoặc không đăng nhập được, hoặc phiếu ai cũng giả được."""
+        return bool(self.google_client_id and self.session_secret)
+
+    def mo_ta_dang_nhap(self) -> str:
+        """Mô tả trạng thái đăng nhập, KHÔNG in khoá bí mật ra màn hình."""
+        if self.dang_nhap_bat():
+            return "Google (mỗi người thấy lịch sử của mình)"
+        if self.google_client_id and not self.session_secret:
+            return "TẮT — có GOOGLE_CLIENT_ID nhưng THIẾU SESSION_SECRET"
+        if self.session_secret and not self.google_client_id:
+            return "TẮT — có SESSION_SECRET nhưng THIẾU GOOGLE_CLIENT_ID"
+        return "ẩn danh (lịch sử theo từng trình duyệt)"
+
     def mo_ta_cau_hinh(self) -> str:
         """Bảng tóm tắt vai trò -> provider/model, dùng cho `--config`."""
         dong = []
@@ -330,6 +359,7 @@ class Settings:
         trong_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
         dong.append(f"  venv   : {'có' if trong_venv else 'KHÔNG (đang dùng Python hệ thống)'}")
         dong.append(f"  db     : {self.mo_ta_database()}")
+        dong.append(f"  login  : {self.mo_ta_dang_nhap()}")
         if DOTENV_LOADED:
             dong.append(f"  .env   : đã nạp ({DOTENV_PATH})")
         elif DOTENV_PROBLEM:

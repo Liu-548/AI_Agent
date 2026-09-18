@@ -32,11 +32,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from app import store
+from app import auth, store
 from app.core.config import settings
 from app.core.pretty import message_text
 
@@ -358,6 +358,31 @@ def _kiem_tra_user(user_id: str) -> str:
     return uid[:64]
 
 
+def _danh_tinh(authorization: Optional[str], user_id: str = "") -> str:
+    """Ai dang goi? Tra ve dinh danh dung de tach lich su.
+
+    Hai che do, quyet dinh boi cau hinh cua server chu KHONG phai boi client:
+
+      - Da bat dang nhap (co GOOGLE_CLIENT_ID + SESSION_SECRET): danh tinh LUON
+        lay tu phieu trong header Authorization. `user_id` client gui len bi bo
+        qua hoan toan - neu tin no thi ai cung doc duoc lich su nguoi khac chi
+        bang cach doi mot chuoi.
+      - Chua bat dang nhap: giu nguyen kieu cu, moi trinh duyet mot ma ngau
+        nhien. Nho vay ai trong nhom chua cau hinh OAuth van chay duoc local.
+    """
+    if not settings.dang_nhap_bat():
+        return _kiem_tra_user(user_id)
+
+    phieu = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        phieu = authorization[7:].strip()
+
+    ruot = auth.doc_phieu(phieu)
+    if not ruot:
+        raise HTTPException(status_code=401, detail="Can dang nhap lai.")
+    return str(ruot["sub"])[:64]
+
+
 def _bat_buoc_co_hoi_thoai(conversation_id: str, user_id: str) -> dict:
     hoi_thoai = store.lay_hoi_thoai(conversation_id, user_id)
     if hoi_thoai is None:
@@ -382,17 +407,64 @@ def config():
 # --------------------------------------------------------------------------- #
 # Endpoint - lich su hoi thoai
 # --------------------------------------------------------------------------- #
+@app.post("/api/auth/google")
+def dang_nhap_google(credential: str = Form(..., description="ID token tu nut Google")):
+    """Doi ID token cua Google lay phieu dang nhap cua he thong nay."""
+    if not settings.dang_nhap_bat():
+        raise HTTPException(status_code=400, detail="Server chua bat dang nhap Google.")
+    try:
+        ho_so = auth.xac_minh_google(credential)
+    except auth.LoiDangNhap as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    store.luu_nguoi_dung(ho_so)
+    return {"token": auth.tao_phieu(ho_so), "user": ho_so}
+
+
+@app.get("/api/me")
+def toi_la_ai(authorization: Optional[str] = Header(None)):
+    """Trang web goi dau tien: can dang nhap khong, va dang la ai?
+
+    Tra ve ca `client_id` de trang tu dung nut dang nhap - nho vay doi Client ID
+    chi phai sua .env, khong phai sua lai HTML.
+    """
+    if not settings.dang_nhap_bat():
+        return {"login_required": False, "client_id": "", "user": None}
+
+    phieu = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        phieu = authorization[7:].strip()
+    ruot = auth.doc_phieu(phieu)
+    nguoi_dung = None
+    if ruot:
+        nguoi_dung = {
+            "sub": ruot["sub"],
+            "email": ruot.get("email", ""),
+            "name": ruot.get("name", ""),
+            "picture": ruot.get("picture", ""),
+        }
+    return {
+        "login_required": True,
+        "client_id": settings.google_client_id,
+        "user": nguoi_dung,
+    }
+
+
 @app.get("/api/conversations")
-def list_conversations(user_id: str):
+def list_conversations(user_id: str = "", authorization: Optional[str] = Header(None)):
     """Danh sach hoi thoai cua mot nguoi: ghim len truoc, roi toi moi nhat."""
-    uid = _kiem_tra_user(user_id)
+    uid = _danh_tinh(authorization, user_id)
     return {"conversations": store.danh_sach_hoi_thoai(uid)}
 
 
 @app.get("/api/conversations/{conversation_id}")
-def get_conversation(conversation_id: str, user_id: str):
+def get_conversation(
+    conversation_id: str,
+    user_id: str = "",
+    authorization: Optional[str] = Header(None),
+):
     """Toan bo tin nhan cua mot hoi thoai - dung khi bam vao no o sidebar."""
-    uid = _kiem_tra_user(user_id)
+    uid = _danh_tinh(authorization, user_id)
     hoi_thoai = _bat_buoc_co_hoi_thoai(conversation_id, uid)
     hoi_thoai["messages"] = store.lay_tin_nhan(conversation_id)
     return hoi_thoai
@@ -401,12 +473,13 @@ def get_conversation(conversation_id: str, user_id: str):
 @app.patch("/api/conversations/{conversation_id}")
 def update_conversation(
     conversation_id: str,
-    user_id: str = Form(...),
+    user_id: str = Form(""),
     title: Optional[str] = Form(None),
     pinned: Optional[bool] = Form(None),
+    authorization: Optional[str] = Header(None),
 ):
     """Doi ten hoac ghim/bo ghim mot hoi thoai."""
-    uid = _kiem_tra_user(user_id)
+    uid = _danh_tinh(authorization, user_id)
     _bat_buoc_co_hoi_thoai(conversation_id, uid)
     if title is not None:
         ten = title.strip()
@@ -419,8 +492,12 @@ def update_conversation(
 
 
 @app.delete("/api/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str, user_id: str):
-    uid = _kiem_tra_user(user_id)
+def delete_conversation(
+    conversation_id: str,
+    user_id: str = "",
+    authorization: Optional[str] = Header(None),
+):
+    uid = _danh_tinh(authorization, user_id)
     if not store.xoa_hoi_thoai(conversation_id, uid):
         raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
     return {"deleted": conversation_id}
@@ -518,6 +595,7 @@ def ask_supervisor(
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
     ),
+    authorization: Optional[str] = Header(None),
 ):
     """Di qua Supervisor, co nho ngu canh cua chinh hoi thoai do.
 
@@ -530,7 +608,12 @@ def ask_supervisor(
     user_id de trong -> van tra loi binh thuong nhung KHONG luu gi (giu tuong
     thich cho ai dang goi API kieu cu).
     """
-    uid = (user_id or "").strip()[:64]
+    if settings.dang_nhap_bat():
+        # Da bat dang nhap -> bat buoc co phieu hop le, va luon luu lich su theo
+        # tai khoan Google chu khong theo chuoi client tu khai.
+        uid = _danh_tinh(authorization)
+    else:
+        uid = (user_id or "").strip()[:64]
     luu_lich_su = bool(uid)
     saved_path: Optional[Path] = None
     hoi_thoai: Optional[dict] = None

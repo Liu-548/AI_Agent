@@ -90,6 +90,21 @@ messages = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+# Hồ sơ người đăng nhập bằng Google. Bảng này CHỈ để hiển thị (tên, ảnh đại
+# diện) và để biết ai đã từng dùng; việc phân tách lịch sử vẫn dựa vào
+# `conversations.user_id`, nên xoá bảng này không làm mất hội thoại của ai.
+users = Table(
+    "users",
+    metadata,
+    # Chính là `sub` của Google — cố định suốt đời tài khoản, khác với email.
+    Column("id", String(64), primary_key=True),
+    Column("email", String(255), nullable=False, default=""),
+    Column("name", String(255), nullable=False, default=""),
+    Column("picture", Text, nullable=False, default=""),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("last_seen_at", DateTime(timezone=True), nullable=False),
+)
+
 _engine: Optional[Engine] = None
 
 
@@ -141,6 +156,34 @@ def get_engine() -> Engine:
 
 def _bay_gio() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def luu_nguoi_dung(ho_so: Dict[str, Any]) -> None:
+    """Ghi/cập nhật hồ sơ sau mỗi lần đăng nhập.
+
+    Không dùng cú pháp UPSERT riêng của từng database (`ON CONFLICT` của
+    Postgres, `INSERT OR REPLACE` của SQLite) vì hai bên viết khác nhau — cả
+    file này giữ đúng một câu lệnh chạy được trên cả hai. Đăng nhập là việc
+    hiếm nên thêm một lượt SELECT ở đây không đáng kể.
+    """
+    uid = str(ho_so.get("sub") or "").strip()
+    if not uid:
+        return
+
+    bay_gio = _bay_gio()
+    engine = get_engine()
+    with engine.begin() as conn:
+        da_co = conn.execute(select(users.c.id).where(users.c.id == uid)).first()
+        gia_tri = {
+            "email": ho_so.get("email", "") or "",
+            "name": ho_so.get("name", "") or "",
+            "picture": ho_so.get("picture", "") or "",
+            "last_seen_at": bay_gio,
+        }
+        if da_co:
+            conn.execute(users.update().where(users.c.id == uid).values(**gia_tri))
+        else:
+            conn.execute(users.insert().values(id=uid, created_at=bay_gio, **gia_tri))
 
 
 def _iso(gia_tri: Any) -> str:

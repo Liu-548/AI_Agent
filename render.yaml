@@ -25,6 +25,16 @@ services:
         sync: false
       - key: HISTORY_MAX_TURNS
         value: "6"
+      # Dang nhap Google. Client ID lay o Google Cloud Console (xem
+      # docs/DEPLOY.md muc 9) - de trong thi web chay che do an danh, moi
+      # trinh duyet mot lich su rieng.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      # Render tu sinh mot chuoi ngau nhien 256-bit cho khoa ky phieu dang
+      # nhap. Khong ai phai nghi ra, khong ai phai chep tay, va no khong bao
+      # gio nam trong git. Doi gia tri nay = dang xuat toan bo nguoi dung.
+      - key: SESSION_SECRET
+        generateValue: true
       # Chay YOLO bang onnxruntime thay vi torch: dinh RAM ~123MB thay vi
       # ~780MB. Goi Free chi cho 512MB cho ca tien trinh nen duong torch
       # chac chan bi kill. Xem docs/DEPLOY.md muc 6.

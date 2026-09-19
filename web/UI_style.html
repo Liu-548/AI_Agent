@@ -73,6 +73,7 @@ button{font-family:inherit;}
 .sidebar{
   width:280px;min-width:280px;
   height:100vh;
+  height:100dvh; /* mobile: tru thanh dia chi trinh duyet, khong bi luot du */
   background:var(--bg-soft);
   border-right:1px solid var(--border);
   display:flex;flex-direction:column;
@@ -137,7 +138,7 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   cursor:pointer;position:relative;
   transition:background .14s;
 }
-.conv:hover{background:var(--surface);}
+@media (hover:hover) and (pointer:fine){.conv:hover{background:var(--surface);}}
 .conv.active{background:var(--accent-soft);}
 .conv.active .conv-name{color:var(--text);font-weight:600;}
 .conv.active::before{
@@ -155,7 +156,7 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   display:none;align-items:center;justify-content:center;flex-shrink:0;
 }
 .conv:hover .conv-menu-btn,.conv.active .conv-menu-btn{display:flex;}
-.conv-menu-btn:hover{background:var(--surface-3);color:var(--text);}
+@media (hover:hover) and (pointer:fine){.conv-menu-btn:hover{background:var(--surface-3);color:var(--text);}}
 .conv-menu-btn svg{width:14px;height:14px;}
 
 .side-foot{
@@ -225,12 +226,12 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   padding:8px 10px;border:none;background:transparent;border-radius:8px;
   color:var(--text-2);font-size:13px;cursor:pointer;text-align:left;
 }
-.menu button:hover{background:var(--surface-2);color:var(--text);}
+@media (hover:hover) and (pointer:fine){.menu button:hover{background:var(--surface-2);color:var(--text);}}
 .menu button.danger{color:var(--danger);}
 .menu button svg{width:15px;height:15px;}
 
 /* ============================ MAIN ============================ */
-.main{flex:1;height:100vh;display:flex;flex-direction:column;min-width:0;position:relative;}
+.main{flex:1;height:100vh;height:100dvh;display:flex;flex-direction:column;min-width:0;position:relative;}
 .topbar{
   display:flex;align-items:center;gap:10px;
   padding:12px 18px;border-bottom:1px solid var(--border-soft);
@@ -311,7 +312,7 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   margin-left:auto;border:none;background:transparent;color:var(--muted);
   cursor:pointer;padding:2px 5px;border-radius:6px;font-size:11px;font-weight:500;
 }
-.answer .who .copy:hover{background:var(--surface-2);color:var(--text);}
+@media (hover:hover) and (pointer:fine){.answer .who .copy:hover{background:var(--surface-2);color:var(--text);}}
 .md{font-size:14.5px;word-break:break-word;}
 .md p{margin:0 0 9px;}
 .md p:last-child{margin-bottom:0;}
@@ -451,8 +452,8 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 /* ============================ MOBILE ============================ */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:35;display:none;}
 @media (max-width:860px){
-  .sidebar{position:fixed;left:0;top:0;bottom:0;box-shadow:var(--shadow);}
-  body.sidebar-hidden .sidebar{margin-left:-280px;}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;box-shadow:var(--shadow);width:85vw;max-width:320px;min-width:0;}
+  body.sidebar-hidden .sidebar{margin-left:-320px;}
   body:not(.sidebar-hidden) .scrim{display:block;}
   .thread{padding:18px 14px 8px;}
   .composer{padding:8px 12px 14px;}
@@ -461,6 +462,17 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   .suggest{font-size:12.5px;padding:10px 13px;}
   .bubble-user{max-width:90%;}
   .hint .phim{display:none;}
+  /* Cham khong co :hover nen nut ba cham phai luon hien, khong doi hover moi
+     hien nhu tren desktop -- neu khong nguoi dung khong biet bam vao dau de
+     doi ten/ghim/xoa hoi thoai. */
+  .conv-menu-btn{display:flex;}
+}
+@media (max-width:400px){
+  .welcome{padding:16px 14px;padding-top:5vh;}
+  .welcome h1{font-size:20px;}
+  .welcome p{font-size:13.5px;margin-bottom:18px;}
+  .suggest{font-size:12px;padding:9px 12px;}
+  .topbar{padding:10px 12px;}
 }
 </style>
 </head>

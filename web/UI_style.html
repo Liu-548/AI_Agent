@@ -231,7 +231,7 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 .menu button svg{width:15px;height:15px;}
 
 /* ============================ MAIN ============================ */
-.main{flex:1;height:100vh;height:100dvh;height:var(--vvh,100dvh);display:flex;flex-direction:column;min-width:0;position:relative;}
+.main{flex:1;height:100vh;height:100dvh;display:flex;flex-direction:column;min-width:0;position:relative;}
 .topbar{
   display:flex;align-items:center;gap:10px;
   padding:12px 18px;border-bottom:1px solid var(--border-soft);
@@ -486,22 +486,6 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
     var t = localStorage.getItem("vaai_theme");
     if (t) document.documentElement.setAttribute("data-theme", t);
   } catch (e) {}
-
-  /* Khung nhap phai luon noi ngay tren ban phim, khong bi che khuat. Chieu
-     cao 100dvh KHONG tru phan ban phim chiem (do la mot lop rieng, khong
-     tinh vao layout viewport tren nhieu trinh duyet Android). window.
-     visualViewport.height moi la chieu cao vung nhin THAT SU con lai sau khi
-     ban phim mo -- theo doi no va ghi vao bien --vvh de .main bam theo. */
-  (function () {
-    var vv = window.visualViewport;
-    if (!vv) return;
-    var capNhat = function () {
-      document.documentElement.style.setProperty("--vvh", vv.height + "px");
-    };
-    capNhat();
-    vv.addEventListener("resize", capNhat);
-    vv.addEventListener("scroll", capNhat);
-  })();
 </script>
 
 <aside class="sidebar">

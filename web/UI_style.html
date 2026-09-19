@@ -2,7 +2,7 @@
 <html lang="vi" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Visual Agentic AI</title>
 <style>
 /* ===================================================================== *
@@ -62,6 +62,13 @@ body{
   -webkit-font-smoothing:antialiased;
   display:flex;
   overflow:hidden;
+  /* Ghim khung app vao dung vung man hinh con nhin thay. Hai bien nay do JS
+     cap nhat theo window.visualViewport moi khi ban phim mo/dong hoac man
+     hinh xoay; khi chua co JS (hoac trinh duyet cu) thi rot ve toan man hinh. */
+  position:fixed;
+  left:0;right:0;
+  top:var(--vv-top,0px);
+  height:var(--vv-h,100%);
 }
 button{font-family:inherit;}
 ::-webkit-scrollbar{width:8px;height:8px;}
@@ -72,8 +79,7 @@ button{font-family:inherit;}
 /* ============================ SIDEBAR ============================ */
 .sidebar{
   width:280px;min-width:280px;
-  height:100vh;
-  height:100dvh; /* mobile: tru thanh dia chi trinh duyet, khong bi luot du */
+  height:100%;   /* bam theo body -- body moi la cai biet vung nhin that su */
   background:var(--bg-soft);
   border-right:1px solid var(--border);
   display:flex;flex-direction:column;
@@ -231,7 +237,7 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 .menu button svg{width:15px;height:15px;}
 
 /* ============================ MAIN ============================ */
-.main{flex:1;height:100vh;height:100dvh;display:flex;flex-direction:column;min-width:0;position:relative;}
+.main{flex:1;height:100%;display:flex;flex-direction:column;min-width:0;position:relative;}
 .topbar{
   display:flex;align-items:center;gap:10px;
   padding:12px 18px;border-bottom:1px solid var(--border-soft);
@@ -486,6 +492,25 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
     var t = localStorage.getItem("vaai_theme");
     if (t) document.documentElement.setAttribute("data-theme", t);
   } catch (e) {}
+
+  /* Ban phim dien thoai KHONG lam co layout cua trang: no chi che bot phan
+     nhin thay. Vi vay 100vh/100dvh van tinh ca phan bi ban phim che, va
+     thanh nhap bi day xuong duoi ban phim. window.visualViewport cho biet
+     chinh xac vung con nhin thay (height) va no dang lech bao nhieu so voi
+     layout (offsetTop) -- ghi hai so do vao bien CSS de body bam theo, the
+     la thanh nhap luon nam sat ngay tren ban phim. */
+  (function () {
+    var vv = window.visualViewport;
+    if (!vv) return;
+    var ghim = function () {
+      var s = document.documentElement.style;
+      s.setProperty("--vv-h", vv.height + "px");
+      s.setProperty("--vv-top", vv.offsetTop + "px");
+    };
+    ghim();
+    vv.addEventListener("resize", ghim);
+    vv.addEventListener("scroll", ghim);
+  })();
 </script>
 
 <aside class="sidebar">
@@ -1281,6 +1306,10 @@ function ganSuKien() {
   /* --- o nhap --- */
   const ta = $("question");
   ta.addEventListener("input", () => { tuGianTextarea(); capNhatNutGui(); });
+  /* Bam vao o nhap tren dien thoai: ban phim mo ra an mat nua man hinh, nen
+     cuon xuong cuoi de cau tra loi moi nhat nam ngay tren o nhap thay vi bi
+     bo lai phia tren. Doi mot nhip cho ban phim hien xong roi moi cuon. */
+  ta.addEventListener("focus", () => { setTimeout(xuongCuoi, 350); });
   ta.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
   });

@@ -42,6 +42,35 @@ pillow>=10.0
 # --- Dev ---
 pytest>=8.0
 
+# --- Web API (app/api.py) ---
+# Wraps the agents in FastAPI for the web UI. Needed to run:
+#   uvicorn app.api:app --reload --port 8000
+fastapi==0.121.0
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+
+# --- Web: conversation storage (app/store.py) ---
+# SQLAlchemy Core so ONE piece of code runs on both SQLite (local dev) and
+# Postgres (deploy). No ORM models, just tables + select/insert.
+# Verifies the Google ID token behind 'Sign in with Google' (app/auth.py).
+# Already pulled in by langchain-google-genai, pinned here because we now
+# import it DIRECTLY - a direct import deserves a direct pin (MT-03).
+google-auth==2.58.0
+
+SQLAlchemy==2.0.36
+# Postgres driver. psycopg 3 (NOT psycopg2 - that one needs a C compiler on
+# Windows). Only used when DATABASE_URL points at Postgres, but installed
+# always so a deploy never fails on a missing driver.
+psycopg[binary]==3.2.3
+
+# --- Vision on the DEPLOYED server: YOLO without torch ---
+# Runs the SAME yolo11n weights exported to .onnx. Measured peak RAM on one
+# image: ~123MB with onnxruntime vs ~780MB with torch. Render Free gives the
+# whole process 512MB, so the torch path gets OOM-killed there.
+# Switch by pointing YOLO_WEIGHTS at the .onnx file - see docs/DEPLOY.md.
+onnxruntime==1.20.1
+numpy>=1.26,<2.2
+
 # --- Vision only: install separately, ~2GB because of torch ---
 # Only the person owning the Vision Agent needs it:
 #   pip install ultralytics==8.3.108

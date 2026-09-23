@@ -1,0 +1,45 @@
+# Khai bao dich vu cho Render (Blueprint). Vao Render -> New -> Blueprint roi
+# tro vao repo nay la no doc file nay, khong phai dien tay tung o.
+#
+# Huong dan day du: docs/DEPLOY.md
+services:
+  - type: web
+    name: visual-agentic-ai
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # $PORT do Render cap phat, KHONG duoc hard-code 8000.
+    # --host 0.0.0.0 la bat buoc: mac dinh uvicorn chi nghe 127.0.0.1 nen
+    # Render khong dan duoc traffic vao, deploy se bao "no open ports detected".
+    startCommand: uvicorn app.api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      # sync:false = Render KHONG lay gia tri tu file nay, ban tu dien trong
+      # dashboard. Khoa va chuoi ket noi khong bao gio duoc nam trong git.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: HISTORY_MAX_TURNS
+        value: "6"
+      # Dang nhap Google. Client ID lay o Google Cloud Console (xem
+      # docs/DEPLOY.md muc 9) - de trong thi web chay che do an danh, moi
+      # trinh duyet mot lich su rieng.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      # Render tu sinh mot chuoi ngau nhien 256-bit cho khoa ky phieu dang
+      # nhap. Khong ai phai nghi ra, khong ai phai chep tay, va no khong bao
+      # gio nam trong git. Doi gia tri nay = dang xuat toan bo nguoi dung.
+      - key: SESSION_SECRET
+        generateValue: true
+      # Chay YOLO bang onnxruntime thay vi torch: dinh RAM ~123MB thay vi
+      # ~780MB. Goi Free chi cho 512MB cho ca tien trinh nen duong torch
+      # chac chan bi kill. Xem docs/DEPLOY.md muc 6.
+      - key: YOLO_WEIGHTS
+        value: yolo11n.onnx
+      # Bat luu anh da khoanh vung de web hien duoc khoi "Anh da khoanh vung".
+      - key: DRAW_DETECTIONS
+        value: "true"

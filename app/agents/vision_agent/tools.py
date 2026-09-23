@@ -139,7 +139,26 @@ def _load_yolo(weights: str):
 
 
 def default_detector(image_ref: str) -> Any:
-    model = _load_yolo(settings.yolo_weights)
+    """Chạy model phát hiện vật thể. Chọn cách chạy theo ĐUÔI FILE của YOLO_WEIGHTS:
+
+      *.onnx  -> ONNX Runtime, không cần torch. Đỉnh RAM đo được ~123MB.
+      *.pt    -> ultralytics + torch như cũ. Đỉnh RAM đo được ~780MB.
+
+    Vì sao phải có hai đường: gói Free của Render chỉ cấp 512MB RAM cho CẢ tiến
+    trình (tính luôn FastAPI + uvicorn), nên đường torch luôn bị kill khi deploy.
+    Cả hai đường dùng CHUNG một bộ trọng số yolo11n, chỉ khác định dạng file, nên
+    kết quả giống nhau — đã đối chiếu trên assets/: cùng số vật thể, cùng nhãn,
+    khung lệch dưới 1 pixel.
+
+    Máy dev vẫn để YOLO_WEIGHTS=yolo11n.pt như cũ cũng chạy bình thường.
+    """
+    weights = settings.yolo_weights
+    if weights.lower().endswith(".onnx"):
+        from app.agents.vision_agent.onnx_detector import onnx_detect
+
+        return onnx_detect(image_ref, weights, settings.yolo_conf, settings.yolo_iou)
+
+    model = _load_yolo(weights)
     return model(image_ref, conf=settings.yolo_conf, iou=settings.yolo_iou, verbose=False)
 
 
@@ -187,6 +206,13 @@ def make_detect_and_count_tool(
         try:
             results = run_detector(ref)
         except ImportError:
+            # Thiếu gói nào thì bảo cài đúng gói đó — người dùng đang chạy
+            # đường .onnx mà bị bảo đi cài ultralytics (2GB) là sai địa chỉ.
+            if settings.yolo_weights.lower().endswith(".onnx"):
+                return tool_error(
+                    "YOLO_NOT_INSTALLED",
+                    "Chưa cài onnxruntime. Chạy: pip install onnxruntime",
+                )
             return tool_error(
                 "YOLO_NOT_INSTALLED",
                 "Chưa cài ultralytics. Chạy: pip install ultralytics==8.3.108",

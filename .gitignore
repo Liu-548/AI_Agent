@@ -8,6 +8,8 @@
 *.pt
 *.pth
 *.onnx
+# Tru bo trong so da xuat de deploy - 10MB, duoi gioi han cua GitHub
+!yolo11n.onnx
 *.engine
 runs/
 
@@ -21,6 +23,10 @@ assets/tmp/
 *.ipynb_checkpoints/
 .ipynb_checkpoints/
 
+# --- Database cuc bo cua web UI (SQLite luc dev) ---
+conversations.db
+*.sqlite3
+
 # --- Python ---
 __pycache__/
 *.py[cod]
@@ -33,6 +39,9 @@ env/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# --- Anh chup man hinh do Claude gui vao thu muc nay ---
+Claude outputs/
 
 # --- IDE / OS ---
 .vscode/

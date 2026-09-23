@@ -39,6 +39,9 @@ python-dotenv==1.0.1
 requests>=2.32,<2.33
 pillow>=10.0
 
+# --- Web UI (Streamlit, bao streamlit_app.py) ---
+streamlit==1.63.0
+
 # --- Dev ---
 pytest>=8.0
 

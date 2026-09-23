@@ -1,0 +1,144 @@
+===============================================================================
+HUONG DAN QUAY VIDEO DEMO / TEST HE THONG VISUAL AGENTIC AI
+===============================================================================
+Chay tren nhanh: temp (da gop du research_agent + vision_agent)
+Thu muc goc:     C:\CTK47C\DoAnChuyenNganh\visual-agentic-ai
+Shell:            PowerShell (mo tai dung thu muc goc repo)
+
+Cach dung file nay: doc tung buoc, copy dong lenh trong dau [] dan vao
+PowerShell roi Enter. Phan "Ket qua mong doi" la de ban biet minh dang
+lam dung, khong bat buoc phai giong 100% (cau tra loi cua LLM co the
+khac chut it moi lan chay).
+
+-------------------------------------------------------------------------------
+BUOC 0 - CHUAN BI TRUOC KHI QUAY (lam 1 lan, KHONG can quay)
+-------------------------------------------------------------------------------
+1. Dam bao dang o dung nhanh:
+   [ git branch --show-current ]
+   -> phai ra "temp"
+
+2. Dam bao co file .env voi 2 key that (khong co thi copy tu mau):
+   [ Copy-Item .env.example .env ]
+   [ notepad .env ]
+   -> dien GROQ_API_KEY (bat dau gsk_) va GEMINI_API_KEY (bat dau AQ.)
+
+3. Dam bao co ultralytics (can cho phan dem vat the bang YOLO):
+   [ .\.venv\Scripts\python.exe -m pip show ultralytics ]
+   -> neu bao "not found" thi cai:
+   [ .\.venv\Scripts\python.exe -m pip install ultralytics==8.3.108 ]
+   (nang ~2GB vi keo theo torch, chi can cai 1 lan)
+
+-------------------------------------------------------------------------------
+BUOC 1 - KIEM TRA CAU HINH (khong ton luot API nao, nen quay dau video)
+-------------------------------------------------------------------------------
+[ .\chay.ps1 -Config ]
+Ket qua mong doi:
+  - Bang 5 vai tro (supervisor/research/vision/describe/utility) -> 5 model
+  - "key[google]: ..." va "key[groq]: ..." deu phai co gia tri, KHONG duoc
+    ghi "thieu"
+  - Dong "venv: co" va ".env: da nap (...)"
+
+[ .\chay.ps1 -Models ]
+Ket qua mong doi: danh sach model that ma 2 key dang dung duoc (dai, cuon
+qua nhanh cung khong sao, chi can cho thay lenh chay khong loi)
+
+[ .\chay.ps1 -Graph ]
+Ket qua mong doi: so do dang mermaid, thay ro 3 node supervisor,
+research_agent, vision_agent noi voi nhau
+
+[ .\chay.ps1 -Test ]
+Ket qua mong doi: dong cuoi "105 passed" (hoac hon, tuy thoi diem), KHONG
+co dong "failed" nao. Day la phan quan trong nhat de chung minh code chay
+dung - nen giu lai canh quay nay ro net.
+
+-------------------------------------------------------------------------------
+BUOC 2 - TEST RESEARCH AGENT (chay thang, khong qua supervisor)
+-------------------------------------------------------------------------------
+[ .\chay.ps1 -r "rotary positional encoding" ]
+Ket qua mong doi:
+  - Thay dong "Update from node agent" va "Update from node tools" chay qua
+    (dau vet ReAct loop: agent goi tool arxiv_search/openalex_search/
+    wikipedia_search, doc ket qua, roi tra loi)
+  - Cau tra loi cuoi cung (=== FINAL ANSWER ===) co dung 3 muc:
+        TOM TAT
+        CHI TIET
+        NGUON
+    Cac cau trong TOM TAT/CHI TIET deu ket thuc bang so trich dan [1], [2]...
+  - Cuoi cung co khoi "=== KIEM TRA NGUON ===" bao "OK - moi khang dinh deu
+    truy duoc ve ket qua tool." -> day la diem nen nhan manh trong video:
+    he thong TU DOI CHIEU trich dan, khong phai model tu khai la dung.
+
+Cau hoi khac de test da dang (chon 1-2 cau la du, tranh ton qua nhieu luot
+Groq/ngay):
+[ .\chay.ps1 -r "Tim bai bao ve reinforcement learning from human feedback" ]
+[ .\chay.ps1 -r "attention is all you need" ]
+
+-------------------------------------------------------------------------------
+BUOC 3 - TEST VISION AGENT (chay thang, khong qua supervisor)
+-------------------------------------------------------------------------------
+3a. Dem vat the bang YOLO (dung anh co san trong assets/):
+[ .\chay.ps1 -v "how many birds in Image: .\assets\chim.jpg" ]
+Ket qua mong doi:
+  - Tool detect_and_count_objects chay, tra ve JSON dang
+    {"counting": {"bird": 1}, "detections": [...]}
+  - Cau tra loi cuoi: "There is 1 bird in the image." (hoac tuong tu)
+
+[ .\chay.ps1 -v "Co bao nhieu con vat trong anh nay? .\assets\cat.jpg" ]
+
+3b. Mo ta anh (dung Gemini, khong can YOLO):
+[ .\chay.ps1 -v "Mo ta anh nay .\assets\test.jpeg" ]
+Ket qua mong doi: mot doan mo ta chi tiet noi dung anh bang tieng Anh (Vision
+Agent dang mac dinh tra loi tieng Anh, day la thiet ke co chu dich - xem
+README.md muc "Dau ra cua Research Agent").
+
+3c. (Tuy chon, de video sinh dong hon) Bat tinh nang ve khung len anh:
+[ $env:DRAW_DETECTIONS = "true" ]
+[ .\chay.ps1 -v "how many birds in Image: .\assets\chim.jpg" ]
+[ $env:DRAW_DETECTIONS = "false" ]
+Ket qua mong doi: JSON tra ve co them truong "annotated_image" tro toi file
+".\assets\chim_detected.jpg" - mo file anh do bang File Explorer de quay,
+se thay khung mau ve quanh con chim kem nhan class + do tin cay (vd
+"bird 92%").
+
+-------------------------------------------------------------------------------
+BUOC 4 - TEST SUPERVISOR (dieu phoi ca 2 agent - phan "an nhat" de quay)
+-------------------------------------------------------------------------------
+4a. Supervisor tu chon research_agent (test luon quy tac ngon ngu + trich dan
+    moi them vao prompt supervisor):
+[ .\chay.ps1 "Tim bai bao ve rotary positional encoding" ]
+Ket qua mong doi:
+  - Log cho thay "transfer_to_research_agent" roi "transfer_back_to_supervisor"
+  - Cau tra loi CUOI CUNG do supervisor tong hop, van giu dung dinh dang
+    TOM TAT/CHI TIET/NGUON voi so trich dan [1][2]..., toan bo bang TIENG VIET
+    (du cau hoi va ket qua tool la tieng Anh)
+
+4b. Supervisor ket hop ca 2 agent trong 1 cau hoi:
+[ .\chay.ps1 "Con vat trong anh .\assets\cat.jpg la con gi? Tim them thong tin ve loai nay" ]
+Ket qua mong doi:
+  - Supervisor goi vision_agent truoc (mo ta/nhan dien con vat trong anh),
+    roi goi research_agent (tim thong tin ve loai do), sau do gop lai thanh
+    1 cau tra loi duy nhat
+  - Day la canh quay tot nhat de chung minh kien truc multi-agent that su
+    hoat dong, nen quay cham, giai thich tung buoc log hien ra
+
+-------------------------------------------------------------------------------
+BUOC 5 (TUY CHON) - CHAY BO TEST DAY DU BANG PYTEST TRUC TIEP
+-------------------------------------------------------------------------------
+[ .\.venv\Scripts\python.exe -m pytest -m "not network" -v ]
+Ket qua mong doi: liet ke tung test PASSED, dong cuoi "105 passed" - phu hop
+neu muon quay canh "zoom" vao tung nhom test (test_grounding, test_vision_tools,
+test_research_tools, test_contract...) thay vi chi xem dong tong ket.
+
+-------------------------------------------------------------------------------
+MEO KHI QUAY
+-------------------------------------------------------------------------------
+- Neu chu tieng Viet bi vo/loi font trong PowerShell: chay.ps1 da tu bat UTF-8,
+  nhung neu van bi thi go truoc 1 lan: [ chcp 65001 ]
+- Moi lenh -v (vision) ton 1 luot Gemini (~20 luot/ngay/model) - dung "chon"
+  cau hoi truoc, dung thu di thu lai nhieu lan khi dang quay.
+- Them "-Quiet" vao cuoi bat ky lenh chay.ps1 nao o Buoc 2-4 neu chi muon
+  hien cau tra loi cuoi, an bot log trace (vi du: .\chay.ps1 -r "..." -Quiet)
+- Thu tu de trinh bay mach lac: Buoc 1 (chung minh he thong "khoe manh")
+  -> Buoc 2 va 3 (tung agent rieng le) -> Buoc 4 (multi-agent phoi hop,
+  cao trao) -> Buoc 5 neu con thoi gian (bang chung test coverage).
+===============================================================================

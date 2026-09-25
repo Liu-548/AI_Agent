@@ -37,7 +37,8 @@ Module này chỉ TỐ CÁO, không sửa câu trả lời. Sửa hộ model là
 from __future__ import annotations
 
 import re
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from dataclasses import dataclass
+from typing import Callable, Dict, Iterable, List, Optional, Pattern, Set, Tuple
 
 # Nhãn nguồn dạng đầy đủ trong ngoặc vuông: [http://arxiv.org/abs/...] hoặc
 # [wikipedia: Tên trang]. Tối thiểu 3 ký tự nên KHÔNG nuốt nhầm số trích dẫn [1].
@@ -72,6 +73,73 @@ TRANG_WIKI_RE = re.compile(r"^Page:\s*(.+)$", re.MULTILINE)
 
 # Nhãn wikipedia, ở cả hai định dạng: "[wikipedia: X]" và mục "[2] wikipedia: X".
 NHAN_WIKI_RE = re.compile(r"wikipedia\s*:\s*(.+)$", re.IGNORECASE)
+
+
+# --------------------------------------------------------------------------- #
+# BẢNG LOẠI NHÃN — thêm một loại nguồn mới = thêm MỘT mục vào LOAI_NHAN_MOI
+# --------------------------------------------------------------------------- #
+# arXiv, OpenAlex-dạng-URL và Wikipedia vẫn dùng regex riêng ở trên (giữ nguyên
+# hành vi cũ). Các loại nhãn thêm sau (DOI, PMID, OpenAlex dạng ngắn, Semantic
+# Scholar) đi theo bảng này:
+#   nhan_re : nhận diện NHÃN / mục NGUỒN, group(1) = mã. Ví dụ "[doi: 10.1/abc]".
+#   trong_re: bắt mã TRẦN trong văn bản (cả bằng chứng lẫn câu trả lời).
+#   chuan   : chuẩn hoá mã trước khi so, để "10.1/ABC." khớp "10.1/abc".
+#   ma_tran : True = mã trần xuất hiện ở bất kỳ đâu trong câu trả lời cũng phải có
+#             trong bằng chứng (MA_BIA). False = chỉ kiểm khi nằm trong nhãn.
+@dataclass(frozen=True)
+class LoaiNhan:
+    ten: str
+    nhan_re: Pattern
+    trong_re: Pattern
+    chuan: Callable[[str], str]
+    ma_tran: bool = True
+
+
+def _chuan_doi(ma: str) -> str:
+    """Chữ thường, bỏ tiền tố https://doi.org/ và dấu câu dính ở cuối."""
+    ma = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", ma.strip(), flags=re.IGNORECASE)
+    return ma.lower().rstrip(".,;:!?'\"")
+
+
+LOAI_NHAN_MOI: Tuple[LoaiNhan, ...] = (
+    LoaiNhan(
+        "DOI",
+        re.compile(r"\bdoi\s*:\s*(\S+)", re.IGNORECASE),
+        re.compile(r"(10\.\d{4,9}/[^\s\]\)]+)"),
+        _chuan_doi,
+    ),
+    # PMID chỉ tính khi đứng sau chữ PMID/pmid — không bắt số trần ngẫu nhiên.
+    LoaiNhan(
+        "PMID",
+        re.compile(r"\bpmid\s*:\s*(\d+)", re.IGNORECASE),
+        re.compile(r"\bpmid\s*:?\s*(\d{1,9})", re.IGNORECASE),
+        lambda ma: ma.strip(),
+    ),
+    LoaiNhan(
+        "OpenAlex",
+        re.compile(r"\bopenalex\s*:\s*(W\d+)", re.IGNORECASE),
+        re.compile(r"\b(W\d{6,})\b"),
+        lambda ma: ma.strip().upper(),
+    ),
+    LoaiNhan(
+        "S2",
+        re.compile(r"\bs2\s*:\s*([0-9a-fA-F]{40})\b", re.IGNORECASE),
+        re.compile(r"\bs2\s*:\s*([0-9a-fA-F]{40})\b", re.IGNORECASE),
+        lambda ma: ma.strip().lower(),
+        ma_tran=False,
+    ),
+)
+
+
+def ma_moi_trong(text: str, loai: LoaiNhan) -> List[str]:
+    """Mọi mã của một loại nhãn mới trong đoạn văn bản, đã chuẩn hoá, không trùng."""
+    return list(dict.fromkeys(loai.chuan(m.group(1)) for m in loai.trong_re.finditer(text or "")))
+
+
+def _ma_that_theo_loai(bang_chung: str) -> Dict[str, Set[str]]:
+    """{tên loại: các mã có thật trong bằng chứng}."""
+    return {loai.ten: set(ma_moi_trong(bang_chung, loai)) for loai in LOAI_NHAN_MOI}
+
 
 # Câu ngắn hơn ngần này coi như tiêu đề/gạch đầu dòng cấu trúc, không bắt gắn nhãn.
 SO_TU_TOI_THIEU = 6
@@ -165,7 +233,12 @@ def ma_openalex_trong(text: str) -> List[str]:
     return [m.group(1) for m in MA_OPENALEX_RE.finditer(text or "")]
 
 
-def _soi_nguon(noi_dung: str, kho_chuan: str, trang_wiki: Set[str]) -> Optional[str]:
+def _soi_nguon(
+    noi_dung: str,
+    kho_chuan: str,
+    trang_wiki: Set[str],
+    ma_that: Optional[Dict[str, Set[str]]] = None,
+) -> Optional[str]:
     """Một chuỗi nguồn có truy được về kết quả tool không?
 
     None = hợp lệ. Chuỗi = mô tả vi phạm (chưa gắn tiền tố mã lỗi).
@@ -179,6 +252,17 @@ def _soi_nguon(noi_dung: str, kho_chuan: str, trang_wiki: Set[str]) -> Optional[
     if ma_arxiv_trong(noi_dung):
         return None
     if ma_openalex_trong(noi_dung):
+        return None
+    ma_that = ma_that or {}
+    for loai in LOAI_NHAN_MOI:
+        khop = loai.nhan_re.search(noi_dung)
+        if khop:
+            ma = loai.chuan(khop.group(1))
+            if ma in ma_that.get(loai.ten, set()):
+                return None
+            return f"{loai.ten} {ma} không có trong bất kỳ kết quả tool nào"
+    # Mã trần không kèm tiền tố (vd. URL doi.org) đã được vòng MA_BIA soi rồi.
+    if any(loai.ma_tran and loai.trong_re.search(noi_dung) for loai in LOAI_NHAN_MOI):
         return None
     khop_wiki = NHAN_WIKI_RE.search(noi_dung)
     if khop_wiki:
@@ -207,7 +291,9 @@ def kiem_tra_grounding(answer: str, tool_texts: Iterable[str]) -> List[str]:
     kho = "\n".join(t or "" for t in tool_texts)
     kho_chuan = _chuan_hoa(kho)
     ma_that = set(ma_arxiv_trong(kho))
-    ma_openalex_that = set(ma_openalex_trong(kho))
+    ma_moi_that = _ma_that_theo_loai(kho)
+    # Nhãn OpenAlex có hai dạng (URL và "openalex: W..."), bằng chứng có thể chỉ có một.
+    ma_openalex_that = set(ma_openalex_trong(kho)) | ma_moi_that["OpenAlex"]
     trang_wiki = {_chuan_hoa(t) for t in TRANG_WIKI_RE.findall(kho)}
 
     vi_pham: List[str] = []
@@ -224,10 +310,18 @@ def kiem_tra_grounding(answer: str, tool_texts: Iterable[str]) -> List[str]:
     for ma in dict.fromkeys(ma_openalex_trong(answer)):
         if ma not in ma_openalex_that:
             vi_pham.append(f"MA_BIA: OpenAlex {ma} không có trong bất kỳ kết quả tool nào")
+    # Các loại mã trần thêm sau (DOI, PMID, OpenAlex dạng ngắn...).
+    for loai in LOAI_NHAN_MOI:
+        if not loai.ma_tran:
+            continue
+        for ma in ma_moi_trong(answer, loai):
+            loi = f"MA_BIA: {loai.ten} {ma} không có trong bất kỳ kết quả tool nào"
+            if ma not in ma_moi_that[loai.ten] and loi not in vi_pham:
+                vi_pham.append(loi)
 
     # 2. Mỗi mục trong NGUỒN phải trỏ tới thứ tool thật sự đã trả về.
     for so in sorted(nguon, key=lambda x: int(x)):
-        loi = _soi_nguon(nguon[so], kho_chuan, trang_wiki)
+        loi = _soi_nguon(nguon[so], kho_chuan, trang_wiki, ma_moi_that)
         if loi:
             vi_pham.append(f"NGUON_BIA: [{so}] {loi}")
 
@@ -235,7 +329,7 @@ def kiem_tra_grounding(answer: str, tool_texts: Iterable[str]) -> List[str]:
     for nhan in dict.fromkeys(m.group(1).strip() for m in NHAN_RE.finditer(than)):
         if nhan.isdigit():
             continue  # số trích dẫn, đã xét ở bước 4
-        loi = _soi_nguon(nhan, kho_chuan, trang_wiki)
+        loi = _soi_nguon(nhan, kho_chuan, trang_wiki, ma_moi_that)
         if loi:
             vi_pham.append(f"NHAN_BIA: {loi}")
 

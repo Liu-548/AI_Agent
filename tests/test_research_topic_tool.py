@@ -25,6 +25,8 @@ from tests.test_research_paper_tools import ROFORMER_ARXIV, _gia_nguon
 
 PROFILE = PROFILES["standard"]
 CAU_DUNG = "RoPE rotates query and key vectors to encode position [http://arxiv.org/abs/2104.09864v5]."
+# Key GIẢ dựng lúc chạy (không viết literal để không giống key thật trong source).
+KEY_GIA = "gsk" + "_" + "X" * 16
 CAU_BIA = "A later paper extends it to very long contexts [http://arxiv.org/abs/2305.13052v1]."
 
 
@@ -141,7 +143,7 @@ class _Nem(FakeToolCallingModel):
 @pytest.mark.parametrize(
     "loi,ma",
     [
-        (RuntimeError("boom with key gsk_ABCDEFGHIJKLMNOP"), "TOPIC_AGENT_FAILED"),
+        (RuntimeError(f"boom with key {KEY_GIA}"), "TOPIC_AGENT_FAILED"),
         (GraphRecursionError("too deep"), "TOPIC_RECURSION_LIMIT"),
         (RuntimeError("Error code: 429 - rate limit reached"), "LLM_RATE_LIMITED"),
     ],
@@ -150,7 +152,7 @@ def test_loi_ben_trong_thanh_chuoi_error(loi, ma):
     tool = make_topic_tool(demo_spec(), profile=PROFILE, model=_Nem(loi=loi))
     msg = goi(tool)
     assert msg.content.startswith(f"ERROR: {ma} |")
-    assert "gsk_ABCDEFGHIJKLMNOP" not in msg.content  # key không lọt ra ngoài
+    assert KEY_GIA not in msg.content  # key không lọt ra ngoài
     assert msg.artifact["status"] == "error"
 
 

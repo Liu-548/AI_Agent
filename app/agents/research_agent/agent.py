@@ -2,6 +2,11 @@
 
 Hợp đồng bắt buộc (xem QUY_TAC_THIET_KE.md, Bảng 3):
     AGENT_NAME, AGENT_DESCRIPTION, build_research_agent(model=None, tools=None, prompt=None)
+
+Hai kiến trúc bên trong, chọn bằng RESEARCH_ARCH (mặc định "single"):
+    single : MỘT ReAct agent với các tool tìm kiếm (hành vi gốc, không đổi).
+    topics : research lead điều phối các agent chủ đề (scholar_agent, explainer_agent...).
+Supervisor không thấy sự khác biệt: cả hai đều là node `research_agent`.
 """
 
 from __future__ import annotations
@@ -21,6 +26,20 @@ AGENT_DESCRIPTION = (
 
 
 def build_research_agent(model=None, tools: Optional[List] = None, prompt: Optional[str] = None):
+    """Điểm vào duy nhất theo hợp đồng IF-01/IF-03. Rẽ nhánh theo RESEARCH_ARCH.
+
+    Đọc cấu hình LÚC GỌI (không import settings ở đầu file) để test đổi được kiến trúc.
+    """
+    from app.core import config
+
+    if config.settings.research_arch_hop_le() == "topics":
+        from app.agents.research_agent.lead import build_research_lead
+
+        return build_research_lead(model=model, tools=tools, prompt=prompt)
+    return _build_single_agent(model=model, tools=tools, prompt=prompt)
+
+
+def _build_single_agent(model=None, tools: Optional[List] = None, prompt: Optional[str] = None):
     """Trả về một CompiledStateGraph chạy vòng lặp ReAct.
 
     model=None  -> LLM của vai trò "research" (cần LLM_API_KEY).

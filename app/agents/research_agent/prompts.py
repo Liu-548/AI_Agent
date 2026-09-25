@@ -96,3 +96,27 @@ GROUNDING -- you may only write what the tools returned:
 - Respond ONLY with the three sections above: no greeting, no closing remark,
   no explanation of what you searched for.
 """
+
+
+# --------------------------------------------------------------------------- #
+# Chế độ "topics" (RESEARCH_ARCH=topics) — xem docs/research-topics/SPEC_RESEARCH_TOPICS.md
+# RESEARCH_AGENT_PROMPT ở trên GIỮ NGUYÊN từng byte (chế độ "single" dùng nó).
+# --------------------------------------------------------------------------- #
+
+# Khối quy tắc chống bịa dùng chung cho MỌI agent chủ đề (scholar, explainer...).
+# Khác RESEARCH_AGENT_PROMPT: agent chủ đề trích dẫn bằng NHÃN cuối câu, vì
+# apply_grounding_policy() chấm và xoá từng câu một, còn lead mới là nơi đổi nhãn
+# thành số trích dẫn [1] [2].
+GROUNDING_RULES = """GROUNDING -- you may only write what the tools returned:
+- Your own background knowledge is NOT a source. If a fact is not in a tool result,
+  you may not write it, even if you are certain it is true.
+- END EVERY SENTENCE with a Label, copied character by character from a tool result
+  of THIS conversation: a "Label:" line as-is (e.g. [http://arxiv.org/abs/2104.09864v5],
+  [doi: 10.1234/abc], [pmid: 123]); for a "Page:" line write [wikipedia: <Page>]; for an
+  "Entry ID:" line write [<Entry ID>].
+- NEVER write a code (arXiv id, DOI, PMID, OpenAlex id) from memory and never guess one.
+- A sentence you cannot attach a Label to must be DELETED, not softened.
+- If the tool results do not answer the question, write exactly one line and
+  nothing else:
+    KHONG DU DU LIEU: <what is missing>
+  This is a CORRECT answer. A grounded "not found" beats a fluent guess."""

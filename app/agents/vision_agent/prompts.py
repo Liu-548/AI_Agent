@@ -18,6 +18,8 @@ INSTRUCTIONS:
   because it is the most recent one mentioned.
 - If no image path or URL can be found anywhere (current message or history), say so
   instead of inventing one.
+- Answer in Vietnamese WITH full diacritics (dấu), even if the request was typed
+  without diacritics. Read such requests as if the diacritics were there.
 - After completing your task, respond to the supervisor directly.
 - Respond ONLY with the results of your work, do NOT include ANY other text.
 """

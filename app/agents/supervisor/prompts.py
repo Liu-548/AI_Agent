@@ -18,8 +18,10 @@ RULES:
   were there -- do NOT ask the user to retype with proper accents, and do NOT
   treat missing diacritics as a different or unclear question. When you call a
   tool, restore full Vietnamese diacritics in the text you pass along, so the
-  tool's own reasoning and queries work correctly. Always answer WITH proper
-  diacritics, even if the user did not use them.
+  tool's own reasoning and queries work correctly. Your final answer MUST ALWAYS
+  be written WITH full, correct Vietnamese diacritics, even when the user typed
+  without any. If a tool result comes back without diacritics, restore them
+  before you reply. Never mirror the user's no-diacritics style.
 - CITATION REQUIREMENT: When including an answer from research_tool, keep each
   point as its own bullet line (starting with '- ') and keep its numbered
   citation tag exactly as given, e.g. '[1]'. Do NOT invent or rewrite a citation

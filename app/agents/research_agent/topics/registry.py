@@ -11,6 +11,8 @@ from typing import Any, Callable, List, Optional, Tuple
 
 from app.agents.research_agent.profiles import SearchProfile
 from app.agents.research_agent.tools import SearchBudget
+from app.agents.research_agent.topics import explainer_agent as explainer
+from app.agents.research_agent.topics import scholar_agent as scholar
 from app.agents.research_agent.topics.topic_tool import make_topic_tool
 
 
@@ -23,7 +25,10 @@ class TopicSpec:
 
 
 # Thêm chủ đề mới: import gói của nó rồi thêm một TopicSpec vào đây.
-TOPIC_SPECS: Tuple[TopicSpec, ...] = ()
+TOPIC_SPECS: Tuple[TopicSpec, ...] = (
+    TopicSpec(scholar.TOPIC_NAME, scholar.TOPIC_DESCRIPTION, scholar.build_scholar_agent, scholar.default_scholar_tools),
+    TopicSpec(explainer.TOPIC_NAME, explainer.TOPIC_DESCRIPTION, explainer.build_explainer_agent, explainer.default_explainer_tools),
+)
 
 
 def build_topic_tools(

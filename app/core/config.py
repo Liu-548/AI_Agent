@@ -81,6 +81,10 @@ PROVIDER_GROQ = "groq"       # giao thức OpenAI, endpoint của Groq
 PROVIDER_OPENAI = "openai"   # giao thức OpenAI (OpenAI thật, Ollama, ...)
 PROVIDERS = (PROVIDER_GOOGLE, PROVIDER_GROQ, PROVIDER_OPENAI)
 
+# Giá trị hợp lệ của RESEARCH_ARCH / RESEARCH_MODE.
+RESEARCH_ARCHS = ("single", "topics")
+RESEARCH_MODES = ("eco", "standard", "full")
+
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GEMINI_OPENAI_COMPAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
@@ -150,6 +154,10 @@ class Settings:
     model_utility: str = field(
         default_factory=lambda: _env("MODEL_UTILITY", "google:gemini-3.1-flash-lite")
     )
+    # Vai trò thứ SÁU: các agent chủ đề (scholar_agent, explainer_agent) nằm bên
+    # trong research lead. Tách sổ hạn mức khỏi "research" để lead và agent chủ đề
+    # không ăn chung một model. Để TRỐNG được khi RESEARCH_ARCH=single (không dùng).
+    model_research_topic: str = field(default_factory=lambda: _env("MODEL_RESEARCH_TOPIC"))
     temperature: float = 0.0
 
     # --- Research tools ---
@@ -178,6 +186,27 @@ class Settings:
     research_max_searches: int = field(
         default_factory=lambda: _env_int("RESEARCH_MAX_SEARCHES", 6)
     )
+    # Có ai đặt RESEARCH_MAX_SEARCHES không? Chế độ "topics" chỉ ghi đè trần của
+    # SearchProfile khi biến này được đặt thật, không phải khi đang dùng mặc định 6.
+    research_max_searches_set: bool = field(
+        default_factory=lambda: bool(_env("RESEARCH_MAX_SEARCHES"))
+    )
+
+    # --- Research nhiều agent chủ đề ---
+    # "single": một ReAct agent như cũ (mặc định). "topics": research lead điều
+    # phối các agent chủ đề. Xem docs/research-topics/SPEC_RESEARCH_TOPICS.md.
+    research_arch: str = field(default_factory=lambda: _env("RESEARCH_ARCH", "single").lower())
+    # eco | standard | full: bộ giới hạn tìm kiếm (SearchProfile), chỉ có nghĩa
+    # khi RESEARCH_ARCH=topics.
+    research_mode: str = field(default_factory=lambda: _env("RESEARCH_MODE", "standard").lower())
+    # OpenAlex bắt buộc key từ 02/2026 (miễn phí). Thiếu key -> bỏ qua nguồn này.
+    openalex_api_key: str = field(default_factory=lambda: _env("OPENALEX_API_KEY"))
+    # Không có key vẫn chạy nhưng hay dính 429.
+    semantic_scholar_api_key: str = field(
+        default_factory=lambda: _env("SEMANTIC_SCHOLAR_API_KEY")
+    )
+    # Tăng hạn mức PubMed (E-utilities). Không bắt buộc.
+    ncbi_api_key: str = field(default_factory=lambda: _env("NCBI_API_KEY"))
 
     # Cac model "gpt-oss" cua Groq la reasoning model: mac dinh Groq tu dat
     # reasoning_effort=medium, va model dot GAN HET ngan sach token mac dinh
@@ -260,6 +289,24 @@ class Settings:
             if provider in PROVIDERS:
                 return provider, model.strip()
         return self.llm_provider, spec
+
+    def research_arch_hop_le(self) -> str:
+        """RESEARCH_ARCH đã kiểm tra. Giá trị lạ -> báo lỗi rõ thay vì chạy sai âm thầm."""
+        if self.research_arch not in RESEARCH_ARCHS:
+            raise RuntimeError(
+                f"RESEARCH_ARCH={self.research_arch!r} không hợp lệ. Chọn một trong "
+                f"{list(RESEARCH_ARCHS)} (sửa trong .env, rồi kiểm tra: python -m app.main --config)."
+            )
+        return self.research_arch
+
+    def research_mode_hop_le(self) -> str:
+        """RESEARCH_MODE đã kiểm tra, cùng cách báo lỗi với research_arch_hop_le()."""
+        if self.research_mode not in RESEARCH_MODES:
+            raise RuntimeError(
+                f"RESEARCH_MODE={self.research_mode!r} không hợp lệ. Chọn một trong "
+                f"{list(RESEARCH_MODES)} (sửa trong .env, rồi kiểm tra: python -m app.main --config)."
+            )
+        return self.research_mode
 
     def api_key_for(self, provider: str) -> str:
         """Key của một nhà cung cấp. Raise kèm hướng dẫn nếu thiếu."""
@@ -361,12 +408,14 @@ class Settings:
             ("vision", self.model_vision),
             ("describe", self.model_describe),
             ("utility", self.model_utility),
+            ("research_topic", self.model_research_topic),
         ):
             provider, model = self.split_model(spec)
-            dong.append(f"  {vai_tro:<11} {provider:<7} {model}")
+            dong.append(f"  {vai_tro:<14} {provider:<7} {model or '(chưa đặt)'}")
         providers = sorted({self.split_model(s)[0] for s in (
             self.model_supervisor, self.model_research, self.model_vision,
             self.model_describe, self.model_utility,
+            self.model_research_topic or self.model_research,
         )})
         dong.append("")
         for p in providers:
@@ -378,6 +427,7 @@ class Settings:
         dong.append(f"  python : {sys.executable}")
         trong_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
         dong.append(f"  venv   : {'có' if trong_venv else 'KHÔNG (đang dùng Python hệ thống)'}")
+        dong.append(f"  research: arch={self.research_arch} mode={self.research_mode}")
         dong.append(f"  db     : {self.mo_ta_database()}")
         dong.append(f"  login  : {self.mo_ta_dang_nhap()}")
         if DOTENV_LOADED:

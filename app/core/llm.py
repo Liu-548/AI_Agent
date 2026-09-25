@@ -16,13 +16,14 @@ from typing import Literal
 
 from app.core.config import PROVIDER_GOOGLE, PROVIDERS, settings
 
-# Năm vai trò = năm sổ hạn mức riêng. Xem config.py.
+# Sáu vai trò = sáu sổ hạn mức riêng. Xem config.py.
 #   supervisor : bộ điều phối
 #   research   : vòng ReAct của Research Agent
 #   vision     : vòng ReAct của Vision Agent
 #   describe   : model đa phương thức bên trong tool image_describer
 #   utility    : tác vụ phụ (trích đường dẫn ảnh khi regex trượt)
-Role = Literal["supervisor", "research", "vision", "describe", "utility"]
+#   research_topic : các agent chủ đề bên trong research lead (RESEARCH_ARCH=topics)
+Role = Literal["supervisor", "research", "vision", "describe", "utility", "research_topic"]
 
 _MODEL_SPEC_BY_ROLE = {
     "supervisor": lambda: settings.model_supervisor,
@@ -30,6 +31,7 @@ _MODEL_SPEC_BY_ROLE = {
     "vision": lambda: settings.model_vision,
     "describe": lambda: settings.model_describe,
     "utility": lambda: settings.model_utility,
+    "research_topic": lambda: settings.model_research_topic,
 }
 
 
@@ -72,7 +74,7 @@ def get_llm(role: Role):
     # Vai trò research + model gpt-oss (Groq): xem giải thích ở config.py,
     # research_reasoning_effort -- không set thì model đốt hết ngân sách token
     # vào suy nghĩ ẩn và trả lời bị cắt ngang giữa chừng.
-    if role == "research" and "gpt-oss" in model.lower() and settings.research_reasoning_effort:
+    if role in ("research", "research_topic") and "gpt-oss" in model.lower() and settings.research_reasoning_effort:
         kwargs["reasoning_effort"] = settings.research_reasoning_effort
 
     return ChatOpenAI(**kwargs)

@@ -1,0 +1,17 @@
+{
+  "total": 1,
+  "data": [
+    {
+      "paperId": "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2",
+      "title": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+      "abstract": "Position encoding in transformer architecture provides supervision for dependency modeling between elements at different positions in the sequence.",
+      "year": 2021,
+      "publicationDate": "2021-04-20",
+      "authors": [{"authorId": "1", "name": "Jianlin Su"}, {"authorId": "2", "name": "Yu Lu"}],
+      "venue": "Neurocomputing",
+      "citationCount": 1500,
+      "externalIds": {"DOI": "10.1016/J.NEUCOM.2023.127063", "ArXiv": "2104.09864", "PubMed": 12345678},
+      "url": "https://www.semanticscholar.org/paper/a1b2c3"
+    }
+  ]
+}

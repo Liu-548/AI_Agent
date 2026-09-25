@@ -1,0 +1,37 @@
+{
+  "meta": {"count": 2},
+  "results": [
+    {
+      "id": "https://openalex.org/W3155807546",
+      "doi": "https://doi.org/10.1016/J.NEUCOM.2023.127063",
+      "display_name": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+      "publication_year": 2023,
+      "publication_date": "2023-12-01",
+      "authorships": [
+        {"author": {"display_name": "Jianlin Su"}},
+        {"author": {"display_name": "Yu Lu"}},
+        {"author": {"display_name": "Shengfeng Pan"}},
+        {"author": {"display_name": "Bo Wen"}}
+      ],
+      "primary_location": {
+        "landing_page_url": "https://arxiv.org/abs/2104.09864",
+        "source": {"display_name": "Neurocomputing"}
+      },
+      "cited_by_count": 1200,
+      "abstract_inverted_index": {"Position": [0], "encoding": [1], "matters": [2, 4], "a": [3], "lot": [5]},
+      "ids": {"openalex": "https://openalex.org/W3155807546", "pmid": "https://pubmed.ncbi.nlm.nih.gov/12345678"}
+    },
+    {
+      "id": "https://openalex.org/W1234567890",
+      "doi": null,
+      "display_name": "A Paper With No Abstract Or Venue",
+      "publication_year": 2020,
+      "publication_date": "2020-05-05",
+      "authorships": [],
+      "primary_location": null,
+      "cited_by_count": 3,
+      "abstract_inverted_index": null,
+      "ids": {"openalex": "https://openalex.org/W1234567890"}
+    }
+  ]
+}

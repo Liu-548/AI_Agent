@@ -1,0 +1,20 @@
+[
+  {
+    "entry_id": "http://arxiv.org/abs/2104.09864v5",
+    "published": "2021-04-20",
+    "updated": "2023-11-08",
+    "title": "RoFormer: Enhanced Transformer with Rotary\n  Position Embedding",
+    "authors": "Jianlin Su, Yu Lu, Shengfeng Pan",
+    "summary": "Position encoding in transformer architecture provides supervision.",
+    "withdrawn": false
+  },
+  {
+    "entry_id": "http://arxiv.org/abs/2001.00001v1",
+    "published": "2020-01-01",
+    "updated": "2020-01-02",
+    "title": "A withdrawn paper",
+    "authors": "Someone",
+    "summary": "This paper has been withdrawn.",
+    "withdrawn": true
+  }
+]

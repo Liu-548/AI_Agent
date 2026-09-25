@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation>
+      <PMID Version="1">31000001</PMID>
+      <Article>
+        <Journal>
+          <JournalIssue><PubDate><Year>2021</Year><Month>Mar</Month></PubDate></JournalIssue>
+          <Title>New England Journal of Medicine</Title>
+        </Journal>
+        <ArticleTitle>CRISPR-Cas9 editing in <i>sickle cell</i> disease.</ArticleTitle>
+        <Abstract>
+          <AbstractText Label="BACKGROUND">Sickle cell disease is a monogenic disorder.</AbstractText>
+          <AbstractText Label="METHODS">We edited BCL11A enhancers in patient cells.</AbstractText>
+        </Abstract>
+        <AuthorList>
+          <Author><LastName>Frangoul</LastName><Initials>H</Initials></Author>
+          <Author><LastName>Locatelli</LastName><Initials>F</Initials></Author>
+        </AuthorList>
+      </Article>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">31000001</ArticleId>
+        <ArticleId IdType="doi">10.1056/NEJMoa2031054</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+  <PubmedArticle>
+    <MedlineCitation>
+      <PMID Version="1">31000002</PMID>
+      <Article>
+        <Journal>
+          <JournalIssue><PubDate><MedlineDate>2019 Dec-2020 Jan</MedlineDate></PubDate></JournalIssue>
+          <Title>Blood</Title>
+        </Journal>
+        <ArticleTitle>Gene therapy outcomes at one year</ArticleTitle>
+      </Article>
+    </MedlineCitation>
+  </PubmedArticle>
+</PubmedArticleSet>

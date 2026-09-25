@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "message": {
+    "DOI": "10.1016/j.neucom.2023.127063",
+    "title": ["RoFormer: Enhanced Transformer with Rotary Position Embedding"],
+    "container-title": ["Neurocomputing"],
+    "issued": {"date-parts": [[2024, 1, 28]]},
+    "author": [{"given": "Jianlin", "family": "Su"}, {"given": "Yu", "family": "Lu"}],
+    "is-referenced-by-count": 900,
+    "abstract": "<jats:p>Position encoding in <jats:italic>transformer</jats:italic> architecture.</jats:p>",
+    "URL": "https://doi.org/10.1016/j.neucom.2023.127063"
+  }
+}

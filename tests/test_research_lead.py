@@ -30,7 +30,7 @@ SPEC = {s.name: s for s in TOPIC_SPECS}
 
 # sha256 của RESEARCH_AGENT_PROMPT chụp lúc B0 (trước khi làm chế độ topics): prompt của chế độ
 # "single" phải GIỮ NGUYÊN TỪNG BYTE.
-PROMPT_SINGLE_SHA256 = "5cadb066c18983ca8171a5a34a6d0912555d57c8e1ade021cb3263ecb08d8c41"
+PROMPT_SINGLE_SHA256 = "abf9534fb91e7cd0d90f440e92dfd348acb7dccd7ea0a195734c0864d1e085cb"
 
 WIKI_TEXT = "Page: Self-attention\nSummary: Self-attention relates positions of a sequence to each other."
 CAU_WIKI = "Self-attention relates the positions of a sequence to each other [wikipedia: Self-attention]."

@@ -33,7 +33,7 @@ def goi(tool, text):
 # Registry
 # --------------------------------------------------------------------------- #
 def test_registry_co_dung_hai_chu_de():
-    assert [s.name for s in TOPIC_SPECS] == ["scholar_agent", "explainer_agent"]
+    assert [s.name for s in TOPIC_SPECS] == ["scholar_agent", "explainer_agent", "news_agent"]
 
 
 @pytest.mark.parametrize("spec", TOPIC_SPECS, ids=lambda s: s.name)

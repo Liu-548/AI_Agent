@@ -298,6 +298,12 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 .pill.research{color:var(--research);}
 .pill.vision{color:var(--vision);}
 .route .sep{color:var(--muted);font-size:11px;}
+.pill.topic{color:var(--research);font-weight:500;border-style:dashed;padding:3px 9px;}
+details.trace{font-size:12.5px;color:var(--text-2);}
+details.trace summary{cursor:pointer;color:var(--muted);width:max-content;max-width:100%;}
+details.trace ul{margin:6px 0 0;padding-left:18px;}
+details.trace li{margin:3px 0;}
+body.gon details.trace{display:none;}
 
 /* Che do gon: chi hien cau tra loi, an duong di cua agent va ghi chu tung agent */
 body.gon .route,body.gon .agent-note{display:none;}
@@ -624,6 +630,9 @@ body.gon .route,body.gon .agent-note{display:none;}
         <button class="suggest" type="button" data-q="Tìm các bài báo mới về multi-agent system">
           <span class="dot" style="background:var(--research)"></span>Bài báo mới về multi-agent
         </button>
+        <button class="suggest" type="button" data-q="Tìm cho tôi thông tin về cuộc phỏng vấn năm 2026 của Elon Musk">
+          <span class="dot" style="background:var(--research)"></span>Tin tức: phỏng vấn Elon Musk 2026
+        </button>
         <button class="suggest" type="button" data-q="Trong ảnh này có mấy con vật và chúng màu gì?" data-need-image="1">
           <span class="dot" style="background:var(--vision)"></span>Đếm vật thể trong ảnh
         </button>
@@ -728,6 +737,8 @@ const LS_THEME = "vaai_theme";
 
 const AGENT_LABEL = { research_agent: "Research Agent", vision_agent: "Vision Agent" };
 const AGENT_CLASS = { research_agent: "research", vision_agent: "vision" };
+/* Agent chu de ben trong Research Agent (RESEARCH_ARCH=topics) */
+const TOPIC_LABEL = { scholar_agent: "Bài báo", explainer_agent: "Giải thích", news_agent: "Tin tức" };
 
 const LS_TOKEN = "vaai_token";
 
@@ -939,7 +950,7 @@ function tenNguon(url) {
    trang nay duoc chinh FastAPI phuc vu va khong duoc phep phu thuoc CDN
    (may cham mang hoac mang truong chan CDN la giao dien vo).
    Moi thu deu escape TRUOC, the HTML chi duoc them vao sau do. */
-function renderMd(raw) {
+function renderMd(raw, linkMap) {
   if (!raw) return "";
   const kept = [];
   const keep = (html, isBlock) => {
@@ -961,6 +972,14 @@ function renderMd(raw) {
   s = s.replace(/\[wikipedia:\s*([^\]\n]+)\]/gi, (m, page) =>
     keep('<a href="https://vi.wikipedia.org/wiki/' + encodeURIComponent(page.trim()) +
          '" target="_blank" rel="noopener">wikipedia: ' + page.trim() + "</a>"));
+  /* Ma tin tuc cua news_agent ("news: gn-1a2b3c4d") -> tieu de bai + link. Server
+     gui kem link_map (chi gom ma that su co trong cau tra loi), khong co thi giu chu. */
+  s = s.replace(/\[?news:\s*(gn-[0-9a-f]{8})\]?/gi, (m, id) => {
+    const l = (linkMap || {})[id.toLowerCase()];
+    if (!l) return m;
+    return keep('<a href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener">' + escapeHtml(l.title) +
+      "</a> — " + escapeHtml(l.source) + (l.date ? ", " + escapeHtml(l.date) : ""));
+  });
   s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)\]]+)/g, (m, pre, url) =>
     pre + keep('<a href="' + url + '" target="_blank" rel="noopener">' + url + "</a>"));
   /* Trich dan [n]: dong NGUON "[n] ..." thanh diem den (span), con [n] trong than bai
@@ -1119,7 +1138,7 @@ function htmlBubbleUser(noiDung, anhBase64) {
     (anhBase64 ? '<img src="data:image/jpeg;base64,' + anhBase64 + '" alt="Ảnh đã gửi">' : "") + "</div>";
 }
 
-function htmlTuyenDuong(agentsUsed) {
+function htmlTuyenDuong(agentsUsed, trace) {
   const pill = (cls, text) => '<span class="pill ' + cls + '"><span class="led"></span>' + text + "</span>";
   let h = pill("supervisor", "Supervisor");
   if (!agentsUsed || !agentsUsed.length) {
@@ -1127,10 +1146,28 @@ function htmlTuyenDuong(agentsUsed) {
   } else {
     agentsUsed.forEach((n) => {
       h += '<span class="sep">→</span>' + pill(AGENT_CLASS[n] || "supervisor", AGENT_LABEL[n] || n);
+      if (n === "research_agent" && trace && trace.length) {
+        const ten = [...new Set(trace.map((t) => t.topic))];
+        h += ten.map((t) => pill("topic", TOPIC_LABEL[t] || t)).join("");
+      }
     });
     h += '<span class="sep">→</span>' + pill("supervisor", "Tổng hợp");
   }
   return '<div class="route">' + h + "</div>";
+}
+
+/* Agent chu de nao da chay, voi cau hoi con nao, ket qua ra sao - de nguoi cham
+   thay duoc kien truc multi-agent ngay tren giao dien. */
+function htmlTrace(trace) {
+  if (!trace || !trace.length) return "";
+  const trangThai = { ok: "có kết quả", no_data: "không đủ dữ liệu", error: "lỗi" };
+  return '<details class="trace"><summary>Chi tiết tra cứu (' + trace.length + " lượt agent chủ đề)</summary><ul>" +
+    trace.map((t) => "<li><b>" + escapeHtml(TOPIC_LABEL[t.topic] || t.topic) + "</b> — " + escapeHtml(t.sub_question || "") +
+      " · " + (trangThai[t.status] || escapeHtml(t.status || "")) +
+      (t.usage && t.usage.llm_calls ? " · " + t.usage.llm_calls + " lượt LLM" : "") +
+      (t.usage && t.usage.elapsed_ms ? " · " + (t.usage.elapsed_ms / 1000).toFixed(1) + "s" : "") +
+      (t.removed ? " · đã lược " + t.removed + " câu không có nguồn" : "") + "</li>").join("") +
+    "</ul></details>";
 }
 
 function htmlTraLoi(answer, extras) {
@@ -1140,18 +1177,19 @@ function htmlTraLoi(answer, extras) {
   if (e.warnings && e.warnings.length) {
     html += '<div class="warn">' + e.warnings.map(escapeHtml).join("<br>") + "</div>";
   }
-  html += htmlTuyenDuong(e.agents_used);
+  html += htmlTuyenDuong(e.agents_used, e.research_trace);
+  html += htmlTrace(e.research_trace);
 
   const tra = e.agent_answers || {};
   (e.agents_used || []).forEach((n) => {
     if (!tra[n]) return;
     html += '<div class="agent-note ' + (AGENT_CLASS[n] || "") + '">' +
-      '<span class="who">' + (AGENT_LABEL[n] || n) + "</span>" + renderMd(tra[n]) + "</div>";
+      '<span class="who">' + (AGENT_LABEL[n] || n) + "</span>" + renderMd(tra[n], e.link_map) + "</div>";
   });
 
   html += '<div class="answer"><div class="who">Supervisor' +
     '<button class="copy" type="button" data-copy="1">Sao chép</button></div>' +
-    '<div class="md">' + (renderMd(answer) || "<p>(không có nội dung trả về)</p>") + "</div></div>";
+    '<div class="md">' + (renderMd(answer, e.link_map) || "<p>(không có nội dung trả về)</p>") + "</div></div>";
 
   if (e.counting && Object.keys(e.counting).length) {
     const chips = Object.entries(e.counting)

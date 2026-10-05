@@ -206,17 +206,56 @@ def _final_answer(result: dict) -> str:
 def _collect_tool_outputs(result: dict) -> Dict[str, str]:
     """Gom noi dung ToolMessage theo ten tool - cung logic voi _gom_ket_qua_tool
     trong app/main.py, chi khac la lam viec tren ket qua .invoke() (dict) thay
-    vi tung chunk cua .stream()."""
+    vi tung chunk cua .stream().
+
+    Supervisor-as-tool: tool BEN TRONG agent con (vd detect_and_count_objects)
+    khong nam trong state cua supervisor, ma nam trong artifact["tool_outputs"]
+    cua ToolMessage research_agent_tool / vision_agent_tool -> gom luon."""
     out: Dict[str, str] = {}
+    for m in _tool_messages(result):
+        name, content, artifact = m
+        if isinstance(artifact, dict):
+            out.update(artifact.get("tool_outputs") or {})
+        if name:
+            out[name] = content
+    return out
+
+
+def _tool_messages(result: dict):
+    """[(ten, noi dung text, artifact)] cua moi ToolMessage trong ket qua graph."""
+    ds = []
     messages = result.get("messages") if isinstance(result, dict) else None
     for m in messages or []:
-        get = m.get if isinstance(m, dict) else (lambda k, d=None: getattr(m, k, d))
+        get = m.get if isinstance(m, dict) else (lambda k, d=None, m=m: getattr(m, k, d))
         if get("type", None) != "tool":
             continue
-        name = get("name", "") or ""
-        if name:
-            out[name] = message_text(get("content", None))
-    return out
+        ds.append((get("name", "") or "", message_text(get("content", None)), get("artifact", None)))
+    return ds
+
+
+# Khuon do app/agents/research_agent/topics/news_agent/tools.py::dinh_dang() in ra.
+TIN_RE = re.compile(
+    r"Label: \[news: (gn-[0-9a-f]{8})\]\nTitle: (.*)\nSource: (.*?) \| Published: (.*)\nURL: (\S+)"
+)
+
+
+def _research_extras(result: dict, answer: str, response: dict) -> None:
+    """Them `research_trace` (agent chu de nao da chay) va `link_map` (ma tin gn-... ->
+    link bai bao) vao response. link_map chi giu ma THAT SU duoc trich trong cau tra
+    loi de extras luu xuong DB khong phinh."""
+    trace, bang_chung = [], []
+    for _ten, _noi_dung, artifact in _tool_messages(result):
+        if isinstance(artifact, dict):
+            trace += artifact.get("topics") or []
+            bang_chung.append(artifact.get("evidence") or "")
+    if trace:
+        response["research_trace"] = trace
+    links = {}
+    for ma, title, source, date, url in TIN_RE.findall("\n".join(bang_chung)):
+        if ma in (answer or ""):
+            links[ma] = {"url": url, "title": title, "source": source, "date": date}
+    if links:
+        response["link_map"] = links
 
 
 def _extract_vision_extras(tool_outputs: Dict[str, str], response: dict) -> None:
@@ -243,9 +282,12 @@ def _extract_vision_extras(tool_outputs: Dict[str, str], response: dict) -> None
 
 def _extract_agent_trace(result: dict):
     """Doc trace cua Supervisor de biet: (1) agent con nao da duoc goi, theo
-    dung thu tu; (2) cau tra loi rieng cua tung agent con truoc khi no
-    "Transferring back to supervisor". Dung de UI hien thi dung con nao lam
-    viec, thay vi chi thay 1 cau tra loi tong hop duy nhat."""
+    dung thu tu; (2) cau tra loi rieng cua tung agent con. Dung de UI hien thi
+    dung con nao lam viec, thay vi chi thay 1 cau tra loi tong hop duy nhat.
+
+    Ho tro ca hai kien truc: supervisor-as-tool (tool `research_agent_tool`,
+    cau tra loi cua agent con = noi dung ToolMessage) va kieu cu handoff
+    (`transfer_to_research_agent`, cau tra loi = AIMessage mang name agent)."""
     KNOWN_AGENTS = {"research_agent", "vision_agent"}
     TRANSFER_BACK_TEXT = "Transferring back to supervisor"
 
@@ -254,14 +296,21 @@ def _extract_agent_trace(result: dict):
 
     messages = result.get("messages") if isinstance(result, dict) else None
     for m in messages or []:
-        get = m.get if isinstance(m, dict) else (lambda k, d=None: getattr(m, k, d))
+        get = m.get if isinstance(m, dict) else (lambda k, d=None, m=m: getattr(m, k, d))
         mtype = get("type", None)
         name = get("name", None) or ""
-
-        if mtype == "tool" and name.startswith("transfer_to_"):
-            agent_name = name[len("transfer_to_") :]
-            if agent_name in KNOWN_AGENTS and agent_name not in agents_used:
+        agent_name = ""
+        if mtype == "tool":
+            if name.startswith("transfer_to_"):
+                agent_name = name[len("transfer_to_") :]
+            elif name.endswith("_tool"):
+                agent_name = name[: -len("_tool")]
+        if agent_name in KNOWN_AGENTS:
+            if agent_name not in agents_used:
                 agents_used.append(agent_name)
+            text = message_text(get("content", None)).strip()
+            if name.endswith("_tool") and text and not text.startswith("ERROR:"):
+                agent_answers[agent_name] = text
 
         if mtype == "ai" and name in KNOWN_AGENTS:
             text = message_text(get("content", None)).strip()
@@ -283,6 +332,9 @@ _TEN_LOI_DE_HIEU = {
     "ARXIV_UNAVAILABLE": "Khong tra cuu duoc arXiv luc nay",
     "WIKIPEDIA_UNAVAILABLE": "Khong tra cuu duoc Wikipedia luc nay",
     "EMPTY_QUERY": "Thieu noi dung de tim kiem",
+    "NEWS_UNAVAILABLE": "Khong tra cuu duoc tin tuc luc nay",
+    "TOPIC_AGENT_FAILED": "Mot agent chu de bi loi",
+    "LLM_RATE_LIMITED": "Model cua agent chu de het han muc tam thoi",
 }
 _MA_LOI_RE = re.compile(r"^ERROR:\s*([A-Z_]+)\s*\|\s*(.*)$", re.DOTALL)
 
@@ -683,6 +735,7 @@ def ask_supervisor(
         if agent_answers:
             response["agent_answers"] = agent_answers
         _extract_vision_extras(tool_outputs, response)
+        _research_extras(result, answer, response)
 
         warnings = [
             _canh_bao_de_doc(name, text)

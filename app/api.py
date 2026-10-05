@@ -776,6 +776,50 @@ def ask_supervisor(
 
 
 # --------------------------------------------------------------------------- #
+# Endpoint - tom tat / viet lai de doc (muc 2 KE_HOACH_NANG_CAP)
+# --------------------------------------------------------------------------- #
+_CHE_DO_TOM_TAT = {
+    "tldr": "Summarize the text below in exactly 3 short bullet points, each starting with '- '.",
+    "de_hieu": (
+        "Rewrite the text below so a first-year student understands it: short sentences, "
+        "simple words, and explain each technical term in brackets the first time it appears."
+    ),
+    "y_chinh": (
+        "Keep ONLY the conclusions and the important numbers, dates and names from the text "
+        "below, as bullet points starting with '- '."
+    ),
+}
+_LUAT_TOM_TAT = (
+    " Write in the same language as the text (Vietnamese WITH full diacritics if the text is "
+    "Vietnamese). Keep citation numbers such as [1] exactly as they are. Do NOT add any "
+    "information that is not in the text. Output only the result, no preamble."
+)
+MAX_KY_TU_TOM_TAT = 8000
+
+
+@app.post("/api/summarize")
+def summarize(
+    text: str = Form(..., description="Cau tra loi can tom tat / viet lai"),
+    mode: str = Form("tldr", description="tldr | de_hieu | y_chinh"),
+):
+    """Mot luot LLM vai tro "utility" (model nhe), khong qua supervisor, khong luu DB."""
+    if mode not in _CHE_DO_TOM_TAT:
+        raise HTTPException(status_code=400, detail=f"mode phai la mot trong {sorted(_CHE_DO_TOM_TAT)}")
+    noi_dung = (text or "").strip()[:MAX_KY_TU_TOM_TAT]
+    if not noi_dung:
+        raise HTTPException(status_code=400, detail="Khong co noi dung de tom tat.")
+    try:
+        from app.core import llm
+
+        ket_qua = llm.get_llm("utility").invoke(
+            [("system", _CHE_DO_TOM_TAT[mode] + _LUAT_TOM_TAT), ("user", noi_dung)]
+        )
+        return {"mode": mode, "summary": message_text(ket_qua.content).strip()}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
+
+
+# --------------------------------------------------------------------------- #
 # Web UI - de FastAPI phuc vu luon trang web
 # --------------------------------------------------------------------------- #
 # Mot dia chi duy nhat cho ca API lan giao dien: gui mot link la ca lop vao test

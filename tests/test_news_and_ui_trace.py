@@ -96,3 +96,25 @@ def test_research_tool_tra_artifact_cho_ui(monkeypatch):
     assert msg.content == "final"
     assert msg.artifact["topics"][0]["topic"] == "news_agent"
     assert msg.artifact["evidence"] == "EV"
+
+
+def test_api_summarize_mot_luot_llm_va_kiem_tra_dau_vao(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import api
+    from app.core import llm
+
+    goi = []
+
+    class _LLMGia:
+        def invoke(self, messages):
+            goi.append(messages)
+            return AIMessage(content="- ý 1 [1]\n- ý 2\n- ý 3")
+
+    monkeypatch.setattr(llm, "get_llm", lambda role: _LLMGia())
+    client = TestClient(api.app)
+    r = client.post("/api/summarize", data={"text": "Câu trả lời dài [1].", "mode": "tldr"})
+    assert r.status_code == 200 and r.json()["summary"].startswith("- ý 1")
+    assert "3 short bullet" in goi[0][0][1]
+    assert client.post("/api/summarize", data={"text": "x", "mode": "bay"}).status_code == 400
+    assert client.post("/api/summarize", data={"text": "   "}).status_code == 400

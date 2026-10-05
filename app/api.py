@@ -413,6 +413,44 @@ def _lich_su_cho_graph(conversation_id: str) -> List[dict]:
     return ket_qua
 
 
+MAX_KY_TU_NGU_CANH = 500
+
+
+def _ngu_canh_nguoi_dung(uid: str, project_id: Optional[str]) -> List[dict]:
+    """Ho so nguoi dung (muc 4) + huong dan cua project (muc 6) -> mot cap tin nhan
+    dat DAU lich su gui cho graph.
+
+    Dung cap user/assistant chu khong phai them mot SystemMessage: prompt cua agent da
+    la SystemMessage dau tien, mot so provider (Gemini) tu choi SystemMessage thu hai.
+    Moi phan cat toi da MAX_KY_TU_NGU_CANH ky tu: ton it token va chan nhoi prompt.
+    """
+    phan = []
+    ho_so = store.lay_ho_so(uid) if uid else None
+    if ho_so:
+        cac_y = [
+            f"{nhan}: {ho_so[k]}"
+            for nhan, k in (("name", "display_name"), ("field", "linh_vuc"), ("notes", "ghi_chu"))
+            if ho_so.get(k)
+        ]
+        if cac_y:
+            phan.append(("User profile -- " + "; ".join(cac_y))[:MAX_KY_TU_NGU_CANH])
+    project = store.lay_project(project_id, uid) if (uid and project_id) else None
+    if project and project["instructions"]:
+        phan.append(
+            f"Project \"{project['name']}\" instructions -- {project['instructions']}"[:MAX_KY_TU_NGU_CANH]
+        )
+    if not phan:
+        return []
+    return [
+        {
+            "role": "user",
+            "content": "[Context set by the user in their settings, apply it to every answer. "
+            "It is NOT a question.]\n" + "\n".join(phan),
+        },
+        {"role": "assistant", "content": "OK."},
+    ]
+
+
 def _kiem_tra_user(user_id: str) -> str:
     uid = (user_id or "").strip()
     if not uid:
@@ -564,11 +602,16 @@ def update_conversation(
     user_id: str = Form(""),
     title: Optional[str] = Form(None),
     pinned: Optional[bool] = Form(None),
+    project_id: Optional[str] = Form(None, description="Gan vao project; chuoi rong = go khoi project"),
     authorization: Optional[str] = Header(None),
 ):
-    """Doi ten hoac ghim/bo ghim mot hoi thoai."""
+    """Doi ten, ghim/bo ghim, hoac chuyen mot hoi thoai vao/ra project."""
     uid = _danh_tinh(authorization, user_id)
     _bat_buoc_co_hoi_thoai(conversation_id, uid)
+    if project_id is not None:
+        if project_id and store.lay_project(project_id, uid) is None:
+            raise HTTPException(status_code=404, detail="Khong tim thay project.")
+        store.gan_project(conversation_id, project_id or None)
     if title is not None:
         ten = title.strip()
         if not ten:
@@ -589,6 +632,79 @@ def delete_conversation(
     if not store.xoa_hoi_thoai(conversation_id, uid):
         raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
     return {"deleted": conversation_id}
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint - ho so nguoi dung (muc 4) va project (muc 6)
+# --------------------------------------------------------------------------- #
+@app.get("/api/profile")
+def get_profile(user_id: str = "", authorization: Optional[str] = Header(None)):
+    uid = _danh_tinh(authorization, user_id)
+    return {"profile": store.lay_ho_so(uid)}
+
+
+@app.put("/api/profile")
+def put_profile(
+    user_id: str = Form(""),
+    display_name: str = Form(""),
+    linh_vuc: str = Form(""),
+    ghi_chu: str = Form(""),
+    authorization: Optional[str] = Header(None),
+):
+    """Ghi de ho so. Cat do dai o store.GIOI_HAN_HO_SO."""
+    uid = _danh_tinh(authorization, user_id)
+    return {"profile": store.luu_ho_so(uid, display_name=display_name, linh_vuc=linh_vuc, ghi_chu=ghi_chu)}
+
+
+@app.delete("/api/profile")
+def delete_profile(user_id: str = "", authorization: Optional[str] = Header(None)):
+    uid = _danh_tinh(authorization, user_id)
+    store.xoa_ho_so(uid)
+    return {"profile": None}
+
+
+@app.get("/api/projects")
+def list_projects(user_id: str = "", authorization: Optional[str] = Header(None)):
+    uid = _danh_tinh_tuy_chon(authorization, user_id)
+    return {"projects": store.danh_sach_project(uid) if uid else []}
+
+
+@app.post("/api/projects")
+def create_project(
+    name: str = Form(...),
+    instructions: str = Form(""),
+    user_id: str = Form(""),
+    authorization: Optional[str] = Header(None),
+):
+    uid = _danh_tinh(authorization, user_id)
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="Ten project khong duoc de trong.")
+    return store.tao_project(uid, name, instructions)
+
+
+@app.patch("/api/projects/{project_id}")
+def update_project(
+    project_id: str,
+    name: Optional[str] = Form(None),
+    instructions: Optional[str] = Form(None),
+    user_id: str = Form(""),
+    authorization: Optional[str] = Header(None),
+):
+    uid = _danh_tinh(authorization, user_id)
+    if name is not None and not name.strip():
+        raise HTTPException(status_code=400, detail="Ten project khong duoc de trong.")
+    if not store.sua_project(project_id, uid, name, instructions):
+        raise HTTPException(status_code=404, detail="Khong tim thay project.")
+    return store.lay_project(project_id, uid)
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: str, user_id: str = "", authorization: Optional[str] = Header(None)):
+    """Xoa project, KHONG xoa hoi thoai ben trong (chi go nhom)."""
+    uid = _danh_tinh(authorization, user_id)
+    if not store.xoa_project(project_id, uid):
+        raise HTTPException(status_code=404, detail="Khong tim thay project.")
+    return {"deleted": project_id}
 
 
 # --------------------------------------------------------------------------- #
@@ -680,6 +796,7 @@ def ask_supervisor(
     question: str = Form(..., description="Cau hoi bat ky - supervisor tu chon agent con phu hop"),
     user_id: str = Form("", description="Id ngau nhien trinh duyet tu sinh, de tach lich su"),
     conversation_id: str = Form("", description="De trong = mo hoi thoai moi"),
+    project_id: str = Form("", description="Chi dung khi mo hoi thoai moi: tao luon trong project nay"),
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
     ),
@@ -716,6 +833,10 @@ def ask_supervisor(
             if conversation_id:
                 hoi_thoai = _bat_buoc_co_hoi_thoai(conversation_id, uid)
                 lich_su = _lich_su_cho_graph(conversation_id)
+                project_id = hoi_thoai.get("project_id") or ""
+            elif project_id and store.lay_project(project_id, uid) is None:
+                project_id = ""
+            lich_su = _ngu_canh_nguoi_dung(uid, project_id) + lich_su
             # Hoi thoai moi: CHUA tao trong database o day. Tao som roi lo agent
             # loi giua chung (vd Gemini qua tai 503) se de lai mot hoi thoai
             # rong khong co tin nhan nao, hien trong sidebar nhung mo ra trong
@@ -749,6 +870,8 @@ def ask_supervisor(
             if hoi_thoai is None:
                 # Hoi thoai moi: chi tao khi da chac chan co cau tra loi de luu.
                 hoi_thoai = store.tao_hoi_thoai(uid, store.dat_tieu_de(question))
+                if project_id:
+                    store.gan_project(hoi_thoai["id"], project_id)
             cid = hoi_thoai["id"]
             extras_user: dict = {}
             if saved_path is not None:

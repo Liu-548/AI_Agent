@@ -105,6 +105,38 @@ users = Table(
     Column("last_seen_at", DateTime(timezone=True), nullable=False),
 )
 
+# Hồ sơ người dùng tự khai (mục 4): agent biết tên, lĩnh vực, ghi chú mà không phải
+# nhắc lại. Bảng MỚI nên create_all tạo được, không đụng bảng cũ đang có dữ liệu.
+user_profiles = Table(
+    "user_profiles",
+    metadata,
+    Column("user_id", String(64), primary_key=True),
+    Column("display_name", String(120), nullable=False, default=""),
+    Column("linh_vuc", String(200), nullable=False, default=""),
+    Column("ghi_chu", Text, nullable=False, default=""),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+# Nhóm project (mục 6). Gắn hội thoại vào project bằng BẢNG NỐI thay vì thêm cột
+# conversations.project_id: create_all KHÔNG thêm cột vào bảng cũ, mà Neon đang có
+# dữ liệu thật -> bảng nối là cách duy nhất không cần ALTER TABLE.
+projects = Table(
+    "projects",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(64), nullable=False, index=True),
+    Column("name", String(120), nullable=False),
+    Column("instructions", Text, nullable=False, default=""),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+project_conversations = Table(
+    "project_conversations",
+    metadata,
+    Column("conversation_id", String(36), primary_key=True),  # 1 hội thoại thuộc tối đa 1 project
+    Column("project_id", String(36), nullable=False, index=True),
+)
+
 _engine: Optional[Engine] = None
 
 
@@ -246,13 +278,14 @@ def tao_hoi_thoai(user_id: str, title: str = "") -> Dict[str, Any]:
 
 
 def _dang_hoi_thoai(hang: Any, so_tin_nhan: Optional[int] = None) -> Dict[str, Any]:
-    lay = hang.get if isinstance(hang, dict) else (lambda k: getattr(hang, k))
+    lay = hang.get if isinstance(hang, dict) else (lambda k: getattr(hang, k, None))
     ket_qua = {
         "id": lay("id"),
         "title": lay("title"),
         "pinned": bool(lay("pinned")),
         "created_at": _iso(lay("created_at")),
         "updated_at": _iso(lay("updated_at")),
+        "project_id": lay("project_id"),
     }
     if so_tin_nhan is not None:
         ket_qua["message_count"] = so_tin_nhan
@@ -267,8 +300,12 @@ def danh_sach_hoi_thoai(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         .subquery()
     )
     cau_lenh = (
-        select(conversations, dem.c.so_tin_nhan)
-        .select_from(conversations.outerjoin(dem, dem.c.conversation_id == conversations.c.id))
+        select(conversations, dem.c.so_tin_nhan, project_conversations.c.project_id)
+        .select_from(
+            conversations.outerjoin(dem, dem.c.conversation_id == conversations.c.id).outerjoin(
+                project_conversations, project_conversations.c.conversation_id == conversations.c.id
+            )
+        )
         .where(conversations.c.user_id == user_id)
         .order_by(conversations.c.pinned.desc(), conversations.c.updated_at.desc())
         .limit(limit)
@@ -285,8 +322,14 @@ def lay_hoi_thoai(conversation_id: str, user_id: str) -> Optional[Dict[str, Any]
 
     Trả 404 cho cả hai trường hợp để người lạ không dò được id nào đang tồn tại.
     """
-    cau_lenh = select(conversations).where(
-        conversations.c.id == conversation_id, conversations.c.user_id == user_id
+    cau_lenh = (
+        select(conversations, project_conversations.c.project_id)
+        .select_from(
+            conversations.outerjoin(
+                project_conversations, project_conversations.c.conversation_id == conversations.c.id
+            )
+        )
+        .where(conversations.c.id == conversation_id, conversations.c.user_id == user_id)
     )
     with get_engine().connect() as conn:
         hang = conn.execute(cau_lenh).first()
@@ -330,6 +373,9 @@ def xoa_hoi_thoai(conversation_id: str, user_id: str) -> bool:
         if not co_that:
             return False
         conn.execute(delete(messages).where(messages.c.conversation_id == conversation_id))
+        conn.execute(
+            delete(project_conversations).where(project_conversations.c.conversation_id == conversation_id)
+        )
         conn.execute(delete(conversations).where(conversations.c.id == conversation_id))
     return True
 
@@ -379,3 +425,111 @@ def lay_tin_nhan(conversation_id: str) -> List[Dict[str, Any]]:
             }
             for hang in conn.execute(cau_lenh)
         ]
+
+
+# --------------------------------------------------------------------------- #
+# Hồ sơ người dùng (mục 4)
+# --------------------------------------------------------------------------- #
+GIOI_HAN_HO_SO = {"display_name": 120, "linh_vuc": 200, "ghi_chu": 500}
+
+
+def lay_ho_so(user_id: str) -> Optional[Dict[str, Any]]:
+    with get_engine().connect() as conn:
+        hang = conn.execute(select(user_profiles).where(user_profiles.c.user_id == user_id)).first()
+    if not hang:
+        return None
+    return {k: getattr(hang, k) or "" for k in GIOI_HAN_HO_SO} | {"updated_at": _iso(hang.updated_at)}
+
+
+def luu_ho_so(user_id: str, **truong: str) -> Dict[str, Any]:
+    """Ghi đè hồ sơ. Cắt mỗi trường theo GIOI_HAN_HO_SO (chặn nhồi prompt)."""
+    gia_tri = {k: (truong.get(k) or "").strip()[:n] for k, n in GIOI_HAN_HO_SO.items()}
+    gia_tri["updated_at"] = _bay_gio()
+    with get_engine().begin() as conn:
+        da_co = conn.execute(select(user_profiles.c.user_id).where(user_profiles.c.user_id == user_id)).first()
+        if da_co:
+            conn.execute(user_profiles.update().where(user_profiles.c.user_id == user_id).values(**gia_tri))
+        else:
+            conn.execute(user_profiles.insert().values(user_id=user_id, **gia_tri))
+    return lay_ho_so(user_id)
+
+
+def xoa_ho_so(user_id: str) -> None:
+    with get_engine().begin() as conn:
+        conn.execute(delete(user_profiles).where(user_profiles.c.user_id == user_id))
+
+
+# --------------------------------------------------------------------------- #
+# Project (mục 6)
+# --------------------------------------------------------------------------- #
+def _dang_project(hang: Any) -> Dict[str, Any]:
+    return {
+        "id": hang.id,
+        "name": hang.name,
+        "instructions": hang.instructions or "",
+        "created_at": _iso(hang.created_at),
+    }
+
+
+def danh_sach_project(user_id: str) -> List[Dict[str, Any]]:
+    cau_lenh = select(projects).where(projects.c.user_id == user_id).order_by(projects.c.created_at.asc())
+    with get_engine().connect() as conn:
+        return [_dang_project(h) for h in conn.execute(cau_lenh)]
+
+
+def lay_project(project_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """None = không có hoặc của người khác (như lay_hoi_thoai, cố ý không phân biệt)."""
+    cau_lenh = select(projects).where(projects.c.id == project_id, projects.c.user_id == user_id)
+    with get_engine().connect() as conn:
+        hang = conn.execute(cau_lenh).first()
+    return _dang_project(hang) if hang else None
+
+
+def tao_project(user_id: str, name: str, instructions: str = "") -> Dict[str, Any]:
+    ban_ghi = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "name": name.strip()[:120],
+        "instructions": (instructions or "").strip()[:2000],
+        "created_at": _bay_gio(),
+    }
+    with get_engine().begin() as conn:
+        conn.execute(projects.insert().values(**ban_ghi))
+    return lay_project(ban_ghi["id"], user_id)
+
+
+def sua_project(project_id: str, user_id: str, name: Optional[str] = None,
+                instructions: Optional[str] = None) -> bool:
+    gia_tri = {}
+    if name is not None:
+        gia_tri["name"] = name.strip()[:120]
+    if instructions is not None:
+        gia_tri["instructions"] = instructions.strip()[:2000]
+    if not gia_tri:
+        return lay_project(project_id, user_id) is not None
+    cau_lenh = (
+        update(projects).where(projects.c.id == project_id, projects.c.user_id == user_id).values(**gia_tri)
+    )
+    with get_engine().begin() as conn:
+        return conn.execute(cau_lenh).rowcount > 0
+
+
+def xoa_project(project_id: str, user_id: str) -> bool:
+    """Xoá project, CHỈ gỡ nhóm — hội thoại bên trong vẫn còn nguyên."""
+    with get_engine().begin() as conn:
+        so = conn.execute(
+            delete(projects).where(projects.c.id == project_id, projects.c.user_id == user_id)
+        ).rowcount
+        if so:
+            conn.execute(delete(project_conversations).where(project_conversations.c.project_id == project_id))
+    return so > 0
+
+
+def gan_project(conversation_id: str, project_id: Optional[str]) -> None:
+    """Gắn hội thoại vào project (None = gỡ). Tầng API kiểm tra quyền sở hữu trước."""
+    with get_engine().begin() as conn:
+        conn.execute(
+            delete(project_conversations).where(project_conversations.c.conversation_id == conversation_id)
+        )
+        if project_id:
+            conn.execute(project_conversations.insert().values(conversation_id=conversation_id, project_id=project_id))

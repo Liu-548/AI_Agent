@@ -200,7 +200,12 @@ def _final_answer(result: dict) -> str:
         return ""
     last = messages[-1]
     content = last.get("content") if isinstance(last, dict) else getattr(last, "content", None)
-    return message_text(content)
+    return chuan_trich_dan(message_text(content))
+
+
+def chuan_trich_dan(text: str) -> str:
+    """gpt-oss hay viet trich dan kieu 【1】 thay vi [1] -> UI khong noi duoc toi NGUON."""
+    return re.sub(r"【(\d{1,3})】", r"[\1]", text or "")
 
 
 def _collect_tool_outputs(result: dict) -> Dict[str, str]:
@@ -308,7 +313,7 @@ def _extract_agent_trace(result: dict):
         if agent_name in KNOWN_AGENTS:
             if agent_name not in agents_used:
                 agents_used.append(agent_name)
-            text = message_text(get("content", None)).strip()
+            text = chuan_trich_dan(message_text(get("content", None))).strip()
             if name.endswith("_tool") and text and not text.startswith("ERROR:"):
                 agent_answers[agent_name] = text
 

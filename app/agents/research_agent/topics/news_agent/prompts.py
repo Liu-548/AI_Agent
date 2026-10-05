@@ -16,6 +16,8 @@ SOURCES:
 
 OUTPUT (English, at most 220 words):
 - What happened, who said what, when and where, newest first. Name the outlet and the date.
+- Cover the 3-5 results that match the question most directly (e.g. titles that mention an
+  interview when asked about an interview), not just the first one or two.
 - Only write what a headline/result actually states; do not guess the content of an article
   from its title beyond what the title says.
 - EVERY sentence ends with a Label (see GROUNDING below), e.g. [news: gn-1a2b3c4d].

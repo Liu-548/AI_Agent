@@ -336,6 +336,7 @@ body.gon .route,body.gon .agent-note{display:none;}
 .agent-note{border-left:2px solid var(--border);padding:1px 0 1px 13px;font-size:13px;color:var(--text-2);}
 .agent-note.research{border-color:var(--research);}
 .agent-note.vision{border-color:var(--vision);}
+.agent-note a,.tom-tat a{color:var(--research);}
 .agent-note .who{font-size:11px;font-weight:650;display:block;margin-bottom:2px;letter-spacing:.02em;}
 .agent-note.research .who{color:var(--research);}
 .agent-note.vision .who{color:var(--vision);}
@@ -1065,7 +1066,7 @@ function renderMd(raw, linkMap) {
     return "" + (kept.length - 1) + "";
   };
 
-  let s = escapeHtml(raw);
+  let s = escapeHtml(raw.replace(/【(\d{1,3})】/g, "[$1]"));
 
   s = s.replace(/```[a-zA-Z0-9]*\n?([\s\S]*?)```/g, (m, code) =>
     keep('<div class="code"><button class="copy-code" type="button" data-copy-code="1">Sao chép</button><pre><code>' +

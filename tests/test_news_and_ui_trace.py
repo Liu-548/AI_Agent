@@ -118,3 +118,9 @@ def test_api_summarize_mot_luot_llm_va_kiem_tra_dau_vao(monkeypatch):
     assert "3 short bullet" in goi[0][0][1]
     assert client.post("/api/summarize", data={"text": "x", "mode": "bay"}).status_code == 400
     assert client.post("/api/summarize", data={"text": "   "}).status_code == 400
+
+
+def test_chuan_trich_dan_ngoac_kieu_gpt_oss():
+    from app import api
+
+    assert api.chuan_trich_dan("Câu A【1】. Câu B 【12】") == "Câu A[1]. Câu B [12]"

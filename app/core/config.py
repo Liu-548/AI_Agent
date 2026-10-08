@@ -259,6 +259,31 @@ class Settings:
     # đốt hạn mức vừa dễ dính 400 output_parse_failed vì hội thoại phình to.
     history_max_turns: int = field(default_factory=lambda: _env_int("HISTORY_MAX_TURNS", 6))
 
+    # --- Bộ nhớ ảnh theo hội thoại (app/image_memory.py, chỉ web UI dùng) ---
+    #
+    # Số ảnh GẦN NHẤT của mỗi hội thoại còn được nhớ: còn bản ảnh trong database
+    # để phân tích lại, và còn nằm trong danh mục gửi cho supervisor. Ảnh cũ hơn
+    # bị xoá bản ảnh (hồ sơ chữ vẫn giữ). Khác HISTORY_MAX_TURNS: danh mục ảnh
+    # KHÔNG bị cắt theo số lượt hỏi-đáp, nên ảnh gửi từ 15 lượt trước vẫn gọi lại được.
+    image_memory_max: int = field(default_factory=lambda: _env_int("IMAGE_MEMORY_MAX", 20))
+    # Bật: mỗi ảnh MỚI tốn thêm một lượt gọi model vai trò "utility" để lập hồ sơ
+    # có cấu trúc (loài, số lượng, màu, bối cảnh) — thứ giúp phân biệt hai ảnh
+    # cùng loại ("con mèo cam" với "con mèo đen"). Tắt, hoặc lượt gọi đó lỗi/hết
+    # hạn mức: hồ sơ chỉ còn đoạn trích câu trả lời đầu tiên về ảnh.
+    image_profile_llm: bool = field(
+        default_factory=lambda: _env_bool("IMAGE_PROFILE_LLM", True)
+    )
+    # Bật: ảnh được gán một chủ đề (động vật, du lịch, món ăn, tài liệu, chung) và
+    # lượt nhìn ảnh nhận lời dặn riêng của chủ đề đó (app/agents/vision_agent/topics.py).
+    # Không tốn thêm lượt gọi model, nhưng ảnh MỚI được lập hồ sơ TRƯỚC khi trả lời
+    # (thay vì sau) để biết chủ đề ngay lượt đầu. Tắt: chạy y như trước khi có chủ đề.
+    vision_topics: bool = field(default_factory=lambda: _env_bool("VISION_TOPICS", True))
+    # Bật: câu hỏi về ảnh KHÔNG cần đếm vật thể được trả lời bằng MỘT lượt model nhìn
+    # ảnh (vai trò "describe") thay cho chuỗi supervisor -> vision agent -> tool ->
+    # vision agent (khoảng 3 lượt gọi model về phía vision). Câu hỏi đếm vẫn qua YOLO,
+    # và đường nhanh lỗi thì tự quay về chuỗi cũ. Tắt: luôn đi chuỗi cũ.
+    vision_direct: bool = field(default_factory=lambda: _env_bool("VISION_DIRECT", True))
+
     # --- Đăng nhập bằng Google (tuỳ chọn) ---
     # Client ID lấy ở Google Cloud Console. Đây là giá trị CÔNG KHAI, nằm ngay
     # trong HTML gửi xuống trình duyệt — không phải bí mật, không cần giấu.

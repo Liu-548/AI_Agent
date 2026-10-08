@@ -286,6 +286,8 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   font-size:14.5px;white-space:pre-wrap;word-break:break-word;
 }
 .bubble-user img{max-width:220px;border-radius:10px;display:block;margin-top:9px;}
+/* So thu tu cua anh trong hoi thoai ("Anh 3") - dung so ma tro ly dung khi hoi lai. */
+.bubble-user .img-no{display:block;margin-top:5px;font-size:12px;color:var(--muted);}
 
 .route{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .pill{
@@ -1114,9 +1116,13 @@ function cuonLaiKhiAnhXong(goc) {
   });
 }
 
-function htmlBubbleUser(noiDung, anhBase64) {
+function htmlSoAnh(soAnh) {
+  return soAnh ? '<span class="img-no">Ảnh ' + Number(soAnh) + "</span>" : "";
+}
+
+function htmlBubbleUser(noiDung, anhBase64, soAnh) {
   return '<div class="bubble-user">' + escapeHtml(noiDung) +
-    (anhBase64 ? '<img src="data:image/jpeg;base64,' + anhBase64 + '" alt="Ảnh đã gửi">' : "") + "</div>";
+    (anhBase64 ? '<img src="data:image/jpeg;base64,' + anhBase64 + '" alt="Ảnh đã gửi">' + htmlSoAnh(soAnh) : "") + "</div>";
 }
 
 function htmlTuyenDuong(agentsUsed) {
@@ -1176,7 +1182,7 @@ function renderTinNhan(messages) {
     if (m.role === "user") {
       turn = document.createElement("div");
       turn.className = "turn";
-      turn.innerHTML = htmlBubbleUser(m.content, (m.extras || {}).image_thumb_base64);
+      turn.innerHTML = htmlBubbleUser(m.content, (m.extras || {}).image_thumb_base64, (m.extras || {}).image_no);
       thread.appendChild(turn);
     } else {
       if (!turn) { turn = document.createElement("div"); turn.className = "turn"; thread.appendChild(turn); }
@@ -1257,6 +1263,9 @@ async function gui(cauHoi, file) {
     const dots = turn.querySelector(".dots");
     const { answer, ...extras } = data;
     dots.outerHTML = htmlTraLoi(answer, extras);
+    /* Server vua danh so cho anh nay -> hien "Anh N" duoi anh vua gui. */
+    const anhVuaGui = turn.querySelector(".bubble-user img");
+    if (data.image_no && anhVuaGui) anhVuaGui.insertAdjacentHTML("afterend", htmlSoAnh(data.image_no));
     cuonLaiKhiAnhXong(turn);
 
     if (data.conversation_id && data.conversation_id !== state.currentId) {

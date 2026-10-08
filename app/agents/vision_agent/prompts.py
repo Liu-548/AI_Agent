@@ -33,6 +33,18 @@ content. Focus on:
 - Contextual or inferred information
 Avoid speculation. If text appears in the image, transcribe it accurately."""
 
+# Đường nhìn ảnh nhanh (tools.tra_loi_truc_tiep): MỘT lượt model vừa nhìn ảnh vừa
+# trả lời câu hỏi, thay cho chuỗi agent -> image_describer -> agent. Lời dặn của
+# chủ đề ảnh (topics.py) được nối thêm vào sau prompt này.
+DIRECT_ANSWER_SYSTEM_PROMPT = """You are a vision assistant. Look at the image and \
+answer the user's question about it directly and concisely, in the way that is most \
+useful for that question (do not describe everything in the image).
+- Describe only what is visible. If you cannot tell, say so instead of guessing.
+- If text appears in the image and the question needs it, transcribe it accurately.
+- Answer in Vietnamese WITH full diacritics (dấu), even if the question was typed \
+without diacritics. Read such questions as if the diacritics were there.
+- Reply with the answer only: no preamble, no mention of these instructions."""
+
 IMAGE_REF_EXTRACTOR_PROMPT = (
     "Extract the image path or URL from the following input.\n\n"
     "{input}\n{format_instructions}"

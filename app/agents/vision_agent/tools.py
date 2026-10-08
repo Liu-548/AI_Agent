@@ -7,6 +7,7 @@ Cả hai tool đều nhận đúng một tham số `text` (câu hỏi tự do c�
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from typing import Any, Callable, List, Optional
 
@@ -14,8 +15,9 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.contracts import tool_error
-from app.agents.vision_agent.prompts import IMAGE_DESCRIBER_SYSTEM_PROMPT
+from app.agents.vision_agent.prompts import DIRECT_ANSWER_SYSTEM_PROMPT, IMAGE_DESCRIBER_SYSTEM_PROMPT
 from app.agents.vision_agent.image_utils import draw_detections, encode_image, extract_image_ref
+from app.agents.vision_agent.topics import khong_dau, loi_dan_hien_tai
 
 
 class ImageToolInput(BaseModel):
@@ -62,8 +64,14 @@ def describe_image(image_path_or_url: str, vision_llm) -> str:
     if settings.vision_detail:
         image_url["detail"] = settings.vision_detail
 
+    # Chủ đề ảnh (topics.py): thêm lời dặn riêng vào system prompt của CHÍNH lượt
+    # nhìn ảnh này, không tốn thêm lượt gọi. Không có chủ đề -> prompt như cũ.
+    loi_dan = loi_dan_hien_tai()
+    system_prompt = (
+        f"{IMAGE_DESCRIBER_SYSTEM_PROMPT}\n\n{loi_dan}" if loi_dan else IMAGE_DESCRIBER_SYSTEM_PROMPT
+    )
     messages = [
-        SystemMessage(content=IMAGE_DESCRIBER_SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt),
         HumanMessage(
             content=[
                 {"type": "text", "text": "Describe the following image for me:"},
@@ -84,6 +92,72 @@ def describe_image(image_path_or_url: str, vision_llm) -> str:
     if not description:
         return tool_error("VISION_EMPTY", "Vision model không trả về mô tả.")
     return description
+
+
+# --------------------------------------------------------------------------- #
+# Đường nhìn ảnh nhanh: một lượt model, không qua agent ReAct
+# --------------------------------------------------------------------------- #
+# Câu hỏi cần ĐẾM / khoanh vật thể thì phải đi qua detect_and_count_objects (YOLO),
+# model nhìn ảnh không đếm đáng tin. Viết KHÔNG DẤU: so khớp sau khi bỏ dấu.
+# Cố ý khớp rộng: nhầm sang đường cũ chỉ chậm hơn, còn nhầm sang đường nhanh mới sai
+# (vd "đêm" bỏ dấu thành "dem" cũng bị coi là đếm; chấp nhận được).
+_CAN_YOLO_RE = re.compile(
+    r"\b(?:bao nhieu|dem|so luong|may (?:con|nguoi|chiec|cai|qua|cay|xe|vat|doi tuong)"
+    r"|how many|count|counting|detect|phat hien|bounding box)\b"
+)
+
+
+def can_dem_vat_the(query: str) -> bool:
+    """Câu hỏi có cần đếm / phát hiện vật thể (-> phải qua YOLO) không."""
+    return bool(_CAN_YOLO_RE.search(khong_dau(query)))
+
+
+def tra_loi_truc_tiep(image_ref: str, cau_hoi: str, vision_llm=None) -> str:
+    """MỘT lượt model đa phương thức: nhìn ảnh và trả lời thẳng câu hỏi.
+
+    Dùng vai trò "describe" (model đã được dùng để nhìn ảnh), kèm lời dặn của chủ
+    đề ảnh nếu đang trong `dung_chu_de`. Không raise: lỗi trả về chuỗi
+    `ERROR: ...` để nơi gọi quay về đường agent cũ.
+    """
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    b64, mime = encode_image(image_ref, get_mime_type=True)
+    if not b64 or not mime:
+        return tool_error(
+            "IMAGE_UNREADABLE",
+            f"Không đọc được ảnh từ {image_ref!r} "
+            "(sai đường dẫn, URL hỏng, hoặc không phải file ảnh).",
+        )
+
+    image_url: dict = {"url": f"data:{mime};base64,{b64}"}
+    if settings.vision_detail:
+        image_url["detail"] = settings.vision_detail
+
+    loi_dan = loi_dan_hien_tai()
+    system_prompt = (
+        f"{DIRECT_ANSWER_SYSTEM_PROMPT}\n\n{loi_dan}" if loi_dan else DIRECT_ANSWER_SYSTEM_PROMPT
+    )
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(
+            content=[
+                {"type": "text", "text": cau_hoi or "Describe the image."},
+                {"type": "image_url", "image_url": image_url},
+            ]
+        ),
+    ]
+    try:
+        llm = vision_llm
+        if llm is None:
+            from app.core.llm import get_llm
+
+            llm = get_llm("describe")
+        text = _message_content_text(llm.invoke(messages))
+    except Exception as exc:  # noqa: BLE001 - thiếu key, hết hạn mức, model không đọc được ảnh
+        return tool_error("VISION_LLM_FAILED", str(exc))
+    if not text:
+        return tool_error("VISION_EMPTY", "Vision model không trả về câu trả lời.")
+    return text
 
 
 def make_image_describer_tool(

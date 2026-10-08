@@ -31,6 +31,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     MetaData,
     String,
     Table,
@@ -103,6 +104,35 @@ users = Table(
     Column("picture", Text, nullable=False, default=""),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("last_seen_at", DateTime(timezone=True), nullable=False),
+)
+
+# Bộ nhớ ảnh theo hội thoại (xem app/image_memory.py). Bảng RIÊNG chứ không nhét
+# vào `messages.extras`, vì hai lý do:
+#   1. `extras` được gửi nguyên xuống trình duyệt mỗi lần mở lại hội thoại; bản
+#      ảnh ~150KB mà nằm trong đó thì mỗi lần mở là tải lại cả chục MB.
+#   2. Bảng mới thì `create_all` tự tạo, KHÔNG phải ALTER bảng đang có dữ liệu
+#      thật trên Neon.
+conversation_images = Table(
+    "conversation_images",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "conversation_id",
+        String(36),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    # Số thứ tự của ảnh TRONG hội thoại, bắt đầu từ 1 và không bao giờ dùng lại.
+    # Đây là "Ảnh 3" mà supervisor và người dùng gọi tên.
+    Column("stt", Integer, nullable=False),
+    # Bản ảnh đã thu nhỏ + nén JPEG. NULL = ảnh đã ra khỏi nhóm được nhớ.
+    Column("data", LargeBinary, nullable=True),
+    # File tạm gần nhất trên server. Có thể đã bị dọn — khi đó dựng lại từ `data`.
+    Column("temp_path", Text, nullable=False, default=""),
+    # Hồ sơ ảnh, JSON dạng chuỗi (cùng lý do với `messages.extras`).
+    Column("profile", Text, nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 _engine: Optional[Engine] = None
@@ -330,6 +360,11 @@ def xoa_hoi_thoai(conversation_id: str, user_id: str) -> bool:
         if not co_that:
             return False
         conn.execute(delete(messages).where(messages.c.conversation_id == conversation_id))
+        conn.execute(
+            delete(conversation_images).where(
+                conversation_images.c.conversation_id == conversation_id
+            )
+        )
         conn.execute(delete(conversations).where(conversations.c.id == conversation_id))
     return True
 
@@ -379,3 +414,126 @@ def lay_tin_nhan(conversation_id: str) -> List[Dict[str, Any]]:
             }
             for hang in conn.execute(cau_lenh)
         ]
+
+
+# --------------------------------------------------------------------------- #
+# Bộ nhớ ảnh theo hội thoại
+# --------------------------------------------------------------------------- #
+def so_anh_ke_tiep(conversation_id: str) -> int:
+    """Số thứ tự mà ảnh sắp gửi sẽ nhận. Hội thoại chưa có ảnh nào -> 1."""
+    cau_lenh = select(func.max(conversation_images.c.stt)).where(
+        conversation_images.c.conversation_id == conversation_id
+    )
+    with get_engine().connect() as conn:
+        return int(conn.execute(cau_lenh).scalar() or 0) + 1
+
+
+def them_anh(
+    conversation_id: str,
+    data: Optional[bytes],
+    temp_path: str = "",
+    profile: Optional[dict] = None,
+    gioi_han: int = 20,
+) -> int:
+    """Ghi một ảnh vào bộ nhớ của hội thoại, trả về số thứ tự của nó.
+
+    Sau khi ghi, chỉ `gioi_han` ảnh gần nhất còn giữ bản ảnh; ảnh cũ hơn bị xoá
+    phần `data` (dòng và hồ sơ chữ vẫn còn, nên số thứ tự không bị dùng lại).
+    """
+    with get_engine().begin() as conn:
+        stt = int(
+            conn.execute(
+                select(func.max(conversation_images.c.stt)).where(
+                    conversation_images.c.conversation_id == conversation_id
+                )
+            ).scalar()
+            or 0
+        ) + 1
+        conn.execute(
+            conversation_images.insert().values(
+                conversation_id=conversation_id,
+                stt=stt,
+                data=data,
+                temp_path=temp_path or "",
+                profile=json.dumps(profile or {}, ensure_ascii=False),
+                created_at=_bay_gio(),
+            )
+        )
+        if gioi_han > 0:
+            conn.execute(
+                update(conversation_images)
+                .where(
+                    conversation_images.c.conversation_id == conversation_id,
+                    conversation_images.c.stt <= stt - gioi_han,
+                    conversation_images.c.data.is_not(None),
+                )
+                .values(data=None)
+            )
+    return stt
+
+
+def danh_sach_anh(conversation_id: str, gioi_han: int = 20) -> List[Dict[str, Any]]:
+    """`gioi_han` ảnh gần nhất, CŨ TRƯỚC. Cố ý KHÔNG đọc cột `data`.
+
+    Hàm này chạy ở mọi lượt hỏi; kéo cả bản ảnh lên chỉ để dựng một danh mục chữ
+    là tải vài MB vô ích mỗi request. Cần bản ảnh thì gọi `lay_du_lieu_anh`.
+    """
+    if gioi_han <= 0:
+        return []
+    cot = conversation_images.c
+    cau_lenh = (
+        select(cot.stt, cot.temp_path, cot.profile, cot.data.is_not(None).label("con_anh"))
+        .where(cot.conversation_id == conversation_id)
+        .order_by(cot.stt.desc())
+        .limit(gioi_han)
+    )
+    with get_engine().connect() as conn:
+        hang = list(conn.execute(cau_lenh))
+    return [
+        {
+            "stt": int(h.stt),
+            "temp_path": h.temp_path or "",
+            "profile": _doc_extras(h.profile),
+            "con_anh": bool(h.con_anh),
+        }
+        for h in reversed(hang)
+    ]
+
+
+def lay_du_lieu_anh(conversation_id: str, stt: int) -> Optional[bytes]:
+    """Bản ảnh đã lưu của một ảnh. None = không có ảnh đó, hoặc đã hết được nhớ."""
+    cau_lenh = select(conversation_images.c.data).where(
+        conversation_images.c.conversation_id == conversation_id,
+        conversation_images.c.stt == stt,
+    )
+    with get_engine().connect() as conn:
+        hang = conn.execute(cau_lenh).first()
+    if not hang or hang.data is None:
+        return None
+    return bytes(hang.data)
+
+
+def cap_nhat_anh(
+    conversation_id: str,
+    stt: int,
+    temp_path: Optional[str] = None,
+    profile: Optional[dict] = None,
+) -> bool:
+    """Sửa đường dẫn file tạm và/hoặc hồ sơ của một ảnh đã lưu."""
+    gia_tri: Dict[str, Any] = {}
+    if temp_path is not None:
+        gia_tri["temp_path"] = temp_path
+    if profile is not None:
+        gia_tri["profile"] = json.dumps(profile, ensure_ascii=False)
+    if not gia_tri:
+        return False
+    cau_lenh = (
+        update(conversation_images)
+        .where(
+            conversation_images.c.conversation_id == conversation_id,
+            conversation_images.c.stt == stt,
+        )
+        .values(**gia_tri)
+    )
+    with get_engine().begin() as conn:
+        return conn.execute(cau_lenh).rowcount > 0

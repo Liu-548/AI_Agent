@@ -71,6 +71,19 @@ def _bearer(auth_mod, ho_so):
     return {"Authorization": "Bearer " + auth_mod.tao_phieu(ho_so)}
 
 
+def test_trace_supervisor_nhan_dien_ten_tool_subagent_thuc_te():
+    import app.api as api_mod
+
+    assert api_mod._extract_agent_trace(
+        {
+            "messages": [
+                {"type": "tool", "name": "vision_agent_tool", "content": "vision result"},
+                {"type": "tool", "name": "research_agent_tool", "content": "research result"},
+            ]
+        }
+    ) == (["vision_agent", "research_agent"], {})
+
+
 # ------------------------------- khách ------------------------------------- #
 def test_khach_van_hoi_duoc_nhung_khong_luu_gi(monkeypatch, tmp_path):
     api_mod, _, store_mod = _nap(monkeypatch, tmp_path)

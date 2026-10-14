@@ -16,6 +16,7 @@ from pathlib import Path
 import streamlit as st
 
 from app.agents import AGENT_SPECS_BY_NAME
+from app.core.agent_display import agent_model_details
 from app.core.authenticity import bao_cao_xac_thuc, kiem_tra_xac_thuc
 from app.core.config import DOTENV_LOADED, DOTENV_PROBLEM, settings
 from app.core.grounding import bao_cao, kiem_tra_grounding
@@ -93,8 +94,14 @@ if submit:
             st.stop()
 
     cau_tra_loi = final_text(last_chunk)
-    st.markdown("### Câu trả lời")
-    st.write(cau_tra_loi or "(rỗng)")
+    with st.chat_message("assistant"):
+        for agent_name, provider, model_name in agent_model_details(
+            agent_key, tool_names, settings
+        ):
+            st.caption(
+                f"🤖 Agent: {agent_name} · ⚡ Model: {provider} / {model_name}"
+            )
+        st.write(cau_tra_loi or "(rỗng)")
 
     can_kiem_tra = bool(tool_names & {"arxiv_search", "openalex_search", "wikipedia_search"})
     if cau_tra_loi and can_kiem_tra:

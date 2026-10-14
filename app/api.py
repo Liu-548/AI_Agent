@@ -251,6 +251,10 @@ def _extract_agent_trace(result: dict):
 
     agents_used: list[str] = []
     agent_answers: Dict[str, str] = {}
+    tool_to_agent = {
+        "research_agent_tool": "research_agent",
+        "vision_agent_tool": "vision_agent",
+    }
 
     messages = result.get("messages") if isinstance(result, dict) else None
     for m in messages or []:
@@ -258,8 +262,10 @@ def _extract_agent_trace(result: dict):
         mtype = get("type", None)
         name = get("name", None) or ""
 
-        if mtype == "tool" and name.startswith("transfer_to_"):
-            agent_name = name[len("transfer_to_") :]
+        if mtype == "tool":
+            agent_name = tool_to_agent.get(name)
+            if agent_name is None and name.startswith("transfer_to_"):
+                agent_name = name[len("transfer_to_") :]
             if agent_name in KNOWN_AGENTS and agent_name not in agents_used:
                 agents_used.append(agent_name)
 

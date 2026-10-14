@@ -37,7 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app import auth, image_memory, store
-from app.core.config import settings
+from app.core.config import RESEARCH_MODES, settings
 from app.core.pretty import message_text
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -589,7 +589,12 @@ def health():
 @app.get("/api/config")
 def config():
     """Vai tro -> provider/model, KHONG lo API key. Dung de debug tu Swagger/Postman."""
-    return {"config": settings.mo_ta_cau_hinh()}
+    return {
+        "config": settings.mo_ta_cau_hinh(),
+        # Web UI doc 2 truong nay de bat/tat nut chon che do tra cuu.
+        "research_arch": settings.research_arch,
+        "research_mode": settings.research_mode,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -866,6 +871,7 @@ def ask_supervisor(
     user_id: str = Form("", description="Id ngau nhien trinh duyet tu sinh, de tach lich su"),
     conversation_id: str = Form("", description="De trong = mo hoi thoai moi"),
     project_id: str = Form("", description="Chi dung khi mo hoi thoai moi: tao luon trong project nay"),
+    research_mode: str = Form("", description="eco | standard | full - de trong = theo RESEARCH_MODE cua server. Chi co tac dung khi RESEARCH_ARCH=topics"),
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
     ),
@@ -886,6 +892,9 @@ def ask_supervisor(
     # cho duy nhat trong ca file cho phep goi ma khong co danh tinh: dung thu
     # phai de dang, con lich su thi phai co chu.
     uid = _danh_tinh_tuy_chon(authorization, user_id)
+    che_do = research_mode.strip().lower()
+    if che_do and che_do not in RESEARCH_MODES:
+        raise HTTPException(status_code=400, detail=f"research_mode phai la mot trong {list(RESEARCH_MODES)}")
     luu_lich_su = bool(uid)
     saved_path: Optional[Path] = None
     hoi_thoai: Optional[dict] = None
@@ -917,7 +926,7 @@ def ask_supervisor(
         tool_sink: Dict[str, str] = {}
         run_config: dict = {
             "recursion_limit": settings.recursion_limit,
-            "configurable": {"tool_sink": tool_sink},
+            "configurable": {"tool_sink": tool_sink, "research_mode": che_do or None},
         }
         bo_giai: Optional[image_memory.BoGiaiAnh] = None
         ho_so_moi: Optional[dict] = None
@@ -963,6 +972,9 @@ def ask_supervisor(
         agents_used, agent_answers = _extract_agent_trace(result)
 
         response: dict = {"answer": answer, "agents_used": agents_used}
+        if "research_agent" in agents_used and settings.research_arch == "topics":
+            # Che do THUC SU da dung cho luot nay (de UI hien, va de kiem chung nut chon).
+            response["research_mode"] = che_do or settings.research_mode
         if agent_answers:
             response["agent_answers"] = agent_answers
         _extract_vision_extras(tool_outputs, response)

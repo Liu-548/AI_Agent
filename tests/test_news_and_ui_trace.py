@@ -90,7 +90,7 @@ def test_research_tool_tra_artifact_cho_ui(monkeypatch):
                 AIMessage(content="final"),
             ]}
 
-    monkeypatch.setattr(sup, "get_research_agent", lambda: _AgentGia)
+    monkeypatch.setattr(sup, "get_research_agent", lambda mode=None: _AgentGia)
     msg = sup.research_tool.invoke({"type": "tool_call", "name": "research_agent_tool",
                                     "args": {"query": "q"}, "id": "c9"})
     assert msg.content == "final"
@@ -124,3 +124,42 @@ def test_chuan_trich_dan_ngoac_kieu_gpt_oss():
     from app import api
 
     assert api.chuan_trich_dan("Câu A【1】. Câu B 【12】") == "Câu A[1]. Câu B [12]"
+
+
+def test_research_tool_truyen_che_do_tu_config_xuong_lead(monkeypatch):
+    """Nút chọn chế độ trên UI: research_mode trong config -> lead dựng với đúng SearchProfile."""
+    from dataclasses import replace
+
+    from app.agents.research_agent import lead
+    from app.agents.supervisor import tools as sup
+    from app.core import config
+
+    class _AgentGia:
+        @staticmethod
+        def invoke(state):
+            return {"messages": [HumanMessage(content="q"), AIMessage(content="ok")]}
+
+    monkeypatch.setattr(config, "settings", replace(config.settings, research_arch="topics"))
+    da_dung = []
+    monkeypatch.setattr(lead, "build_research_lead", lambda profile=None, **kw: da_dung.append(profile) or _AgentGia)
+    sup.reset_sub_agent_instances()
+    try:
+        for mode in ("eco", "full", "eco"):
+            sup.research_tool.invoke(
+                {"type": "tool_call", "name": "research_agent_tool", "args": {"query": "q"}, "id": "c1"},
+                config={"configurable": {"research_mode": mode}},
+            )
+    finally:
+        sup.reset_sub_agent_instances()
+    # eco dựng 1 lần rồi dùng lại; mỗi chế độ mang đúng trần của profile.
+    assert [p.name for p in da_dung] == ["eco", "full"]
+    assert da_dung[0].max_topic_calls == 1 and da_dung[1].max_topic_calls == 3
+
+
+def test_api_tu_choi_research_mode_la():
+    from fastapi.testclient import TestClient
+
+    from app.api import app
+
+    r = TestClient(app).post("/api/ask", data={"question": "hi", "research_mode": "turbo"})
+    assert r.status_code == 400

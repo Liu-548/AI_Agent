@@ -482,6 +482,12 @@ body.gon .route,body.gon .agent-note{display:none;}
 .send:disabled{opacity:.35;cursor:default;}
 .send svg{width:17px;height:17px;}
 .hint{text-align:center;font-size:11px;color:var(--muted);margin-top:9px;}
+/* Nut chon che do tra cuu eco/standard/full (SearchProfile cua Research Agent). */
+.mode-select{
+  align-self:center;height:32px;border:1px solid var(--border);border-radius:9px;
+  background:var(--surface-2);color:var(--text);font:inherit;font-size:12.5px;padding:0 6px;cursor:pointer;
+}
+.mode-select:disabled{opacity:.45;cursor:not-allowed;}
 
 /* ============================ CAI DAT ============================ */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90;display:none;}
@@ -702,6 +708,11 @@ body.gon .route,body.gon .agent-note{display:none;}
         </button>
         <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/bmp" hidden>
         <textarea id="question" rows="1" placeholder="Nhắn cho Supervisor..."></textarea>
+        <select id="research-mode" class="mode-select" aria-label="Chế độ tra cứu" title="Chế độ tra cứu của Research Agent">
+          <option value="eco">Tiết kiệm</option>
+          <option value="standard">Chuẩn</option>
+          <option value="full">Đầy đủ</option>
+        </select>
         <button type="submit" class="send" id="btn-send" disabled title="Gửi">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>
@@ -840,6 +851,7 @@ const AGENT_LABEL = { research_agent: "Research Agent", vision_agent: "Vision Ag
 const AGENT_CLASS = { research_agent: "research", vision_agent: "vision" };
 /* Agent chu de ben trong Research Agent (RESEARCH_ARCH=topics) */
 const TOPIC_LABEL = { scholar_agent: "Bài báo", explainer_agent: "Giải thích", news_agent: "Tin tức" };
+const MODE_LABEL = { eco: "Tiết kiệm", standard: "Chuẩn", full: "Đầy đủ" };
 
 const LS_TOKEN = "vaai_token";
 
@@ -1280,7 +1292,7 @@ function htmlBubbleUser(noiDung, anhBase64, soAnh) {
     (anhBase64 ? '<img src="data:image/jpeg;base64,' + anhBase64 + '" alt="Ảnh đã gửi">' + htmlSoAnh(soAnh) : "") + "</div>";
 }
 
-function htmlTuyenDuong(agentsUsed, trace) {
+function htmlTuyenDuong(agentsUsed, trace, cheDo) {
   const pill = (cls, text) => '<span class="pill ' + cls + '"><span class="led"></span>' + text + "</span>";
   let h = pill("supervisor", "Supervisor");
   if (!agentsUsed || !agentsUsed.length) {
@@ -1292,6 +1304,7 @@ function htmlTuyenDuong(agentsUsed, trace) {
         const ten = [...new Set(trace.map((t) => t.topic))];
         h += ten.map((t) => pill("topic", TOPIC_LABEL[t] || t)).join("");
       }
+      if (n === "research_agent" && cheDo) h += pill("topic", "Chế độ: " + escapeHtml(MODE_LABEL[cheDo] || cheDo));
     });
     h += '<span class="sep">→</span>' + pill("supervisor", "Tổng hợp");
   }
@@ -1319,7 +1332,7 @@ function htmlTraLoi(answer, extras) {
   if (e.warnings && e.warnings.length) {
     html += '<div class="warn">' + e.warnings.map(escapeHtml).join("<br>") + "</div>";
   }
-  html += htmlTuyenDuong(e.agents_used, e.research_trace);
+  html += htmlTuyenDuong(e.agents_used, e.research_trace, e.research_mode);
   html += htmlTrace(e.research_trace);
 
   const tra = e.agent_answers || {};
@@ -1439,6 +1452,8 @@ async function gui(cauHoi, file) {
   if (state.currentId) body.append("conversation_id", state.currentId);
   else if (state.projectMoi) body.append("project_id", state.projectMoi);
   if (file) body.append("file", file);
+  const cheDo = $("research-mode");
+  if (!cheDo.disabled) body.append("research_mode", cheDo.value);
 
   try {
     const data = await api("/api/ask", { method: "POST", body: body });
@@ -1985,7 +2000,24 @@ async function luuMove() {
   hienManChao(true);
   veChanTrang();
   napDanhSach();
+  ganNutCheDo();
 })();
+
+/* Nut chon che do tra cuu. Server quyet dinh co dung duoc khong: chi RESEARCH_ARCH=topics
+   moi co SearchProfile, che do "single" thi nut bi khoa (gui len cung khong co tac dung). */
+async function ganNutCheDo() {
+  const sel = $("research-mode");
+  let cfg = null;
+  try { cfg = await api("/api/config"); } catch (e) { cfg = null; }
+  let daLuu = "";
+  try { daLuu = localStorage.getItem("vaai_che_do") || ""; } catch (e) {}
+  sel.value = MODE_LABEL[daLuu] ? daLuu : ((cfg && cfg.research_mode) || "standard");
+  if (!cfg || cfg.research_arch !== "topics") {
+    sel.disabled = true;
+    sel.title = "Chỉ dùng được khi server chạy RESEARCH_ARCH=topics";
+  }
+  sel.onchange = () => { try { localStorage.setItem("vaai_che_do", sel.value); } catch (e) {} };
+}
 </script>
 </body>
 </html>

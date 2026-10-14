@@ -27,11 +27,27 @@ _CHI_SO_RE = re.compile(
 # Quản lý Singleton instance để tránh rebuild agent mỗi lần gọi tool
 _research_agent_instance = None
 _vision_agent_instance = None
+# research_mode (eco/standard/full) -> research lead dựng với SearchProfile đó. Profile
+# được đọc lúc DỰNG agent, nên mỗi chế độ cần một bản riêng (tối đa 3 bản).
+_research_agent_theo_che_do: dict = {}
 
 
-def get_research_agent():
-    """Tái sử dụng instance của Research Agent."""
+def get_research_agent(mode: Optional[str] = None):
+    """Tái sử dụng instance của Research Agent.
+
+    mode (eco/standard/full, từ nút chọn trên UI) chỉ có tác dụng khi RESEARCH_ARCH=topics;
+    không truyền hoặc đang chạy "single" thì dùng bản mặc định như cũ.
+    """
     global _research_agent_instance
+    from app.core import config as app_config
+
+    if mode and app_config.settings.research_arch_hop_le() == "topics":
+        if mode not in _research_agent_theo_che_do:
+            from app.agents.research_agent.lead import build_research_lead
+            from app.agents.research_agent.profiles import get_profile
+
+            _research_agent_theo_che_do[mode] = build_research_lead(profile=get_profile(mode))
+        return _research_agent_theo_che_do[mode]
     if _research_agent_instance is None:
         _research_agent_instance = build_research_agent()
     return _research_agent_instance
@@ -50,6 +66,7 @@ def reset_sub_agent_instances():
     global _research_agent_instance, _vision_agent_instance
     _research_agent_instance = None
     _vision_agent_instance = None
+    _research_agent_theo_che_do.clear()
 
 
 def _chay_agent_con(agent, query: str, config: Optional[dict] = None):
@@ -182,12 +199,13 @@ def giai_bi_danh_anh(
 
 
 @tool("research_agent_tool", response_format="content_and_artifact")
-def research_tool(query: str):
+def research_tool(query: str, config: RunnableConfig = None):
     """Use for ANY information question: scientific papers (arXiv, OpenAlex...), explanations
     of concepts (Wikipedia), and recent news, interviews or events (news search).
     Input should be a clear, self-contained question.
     """
-    return _chay_agent_con(get_research_agent(), query)
+    mode = ((config or {}).get("configurable") or {}).get("research_mode")
+    return _chay_agent_con(get_research_agent(mode), query)
 
 
 @tool("vision_agent_tool", response_format="content_and_artifact")

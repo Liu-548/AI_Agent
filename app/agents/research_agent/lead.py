@@ -13,6 +13,7 @@ Grounding chạy HAI TẦNG:
 from __future__ import annotations
 
 import logging
+import re
 from typing import List, Optional
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -70,7 +71,8 @@ def grounding_hook(state: dict) -> dict:
     cuoi = state["messages"][-1]
     if not isinstance(cuoi, AIMessage) or cuoi.tool_calls:
         return {}
-    tra_loi = message_text(cuoi.content)
+    # gpt-oss hay viết 【1】 thay vì [1]: chuẩn hoá trước để grounding đếm đúng trích dẫn.
+    tra_loi = re.sub(r"【(\d{1,3})】", r"[\1]", message_text(cuoi.content))
     if not tra_loi.strip():
         return {}
 

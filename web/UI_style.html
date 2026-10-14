@@ -165,6 +165,32 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 .conv:hover .conv-menu-btn,.conv.active .conv-menu-btn{display:flex;}
 @media (hover:hover) and (pointer:fine){.conv-menu-btn:hover{background:var(--surface-3);color:var(--text);}}
 .conv-menu-btn svg{width:14px;height:14px;}
+.conv.in-proj{padding-left:24px;}
+.conv-group .mini{
+  float:right;border:none;background:none;color:var(--accent);cursor:pointer;
+  font-size:11px;font-weight:650;text-transform:none;letter-spacing:0;padding:0 2px;
+}
+.proj{display:flex;align-items:center;gap:2px;border-radius:10px;padding-right:4px;}
+.proj.active{background:var(--accent-soft);}
+.proj-name{
+  flex:1;min-width:0;text-align:left;background:none;border:none;color:var(--text);
+  font-family:inherit;font-size:13px;font-weight:600;padding:8px 6px 8px 9px;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.proj-name .dem{color:var(--muted);font-weight:500;font-size:11px;margin-left:4px;}
+.proj-btn{
+  border:none;background:none;color:var(--muted);cursor:pointer;border-radius:7px;
+  min-width:26px;height:26px;font-size:15px;line-height:1;font-family:inherit;
+}
+@media (hover:hover) and (pointer:fine){.proj-btn:hover{background:var(--surface-3);color:var(--text);}}
+@media (pointer:coarse){.proj-btn{min-width:44px;height:44px;}}
+.field textarea,.field select{
+  width:100%;background:var(--surface-2);border:1px solid var(--border);
+  color:var(--text);font-size:13px;padding:9px 11px;border-radius:9px;
+  font-family:inherit;outline:none;resize:vertical;
+}
+.field textarea:focus,.field select:focus{border-color:var(--accent);}
+.btn.danger{color:var(--danger);margin-right:auto;}
 
 .side-foot{
   padding:10px 14px;border-top:1px solid var(--border);
@@ -300,12 +326,19 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 .pill.research{color:var(--research);}
 .pill.vision{color:var(--vision);}
 .route .sep{color:var(--muted);font-size:11px;}
+.pill.topic{color:var(--research);font-weight:500;border-style:dashed;padding:3px 9px;}
+details.trace{font-size:12.5px;color:var(--text-2);}
+details.trace summary{cursor:pointer;color:var(--muted);width:max-content;max-width:100%;}
+details.trace ul{margin:6px 0 0;padding-left:18px;}
+details.trace li{margin:3px 0;}
+body.gon details.trace{display:none;}
 
 /* Che do gon: chi hien cau tra loi, an duong di cua agent va ghi chu tung agent */
 body.gon .route,body.gon .agent-note{display:none;}
 .agent-note{border-left:2px solid var(--border);padding:1px 0 1px 13px;font-size:13px;color:var(--text-2);}
 .agent-note.research{border-color:var(--research);}
 .agent-note.vision{border-color:var(--vision);}
+.agent-note a,.tom-tat a{color:var(--research);}
 .agent-note .who{font-size:11px;font-weight:650;display:block;margin-bottom:2px;letter-spacing:.02em;}
 .agent-note.research .who{color:var(--research);}
 .agent-note.vision .who{color:var(--vision);}
@@ -324,7 +357,19 @@ body.gon .route,body.gon .agent-note{display:none;}
   cursor:pointer;padding:2px 5px;border-radius:6px;font-size:11px;font-weight:500;
 }
 @media (hover:hover) and (pointer:fine){.answer .who .copy:hover{background:var(--surface-2);color:var(--text);}}
-.md{font-size:14.5px;word-break:break-word;}
+.md{font-size:calc(14.5px * var(--co-chu, 1));line-height:1.6;word-break:break-word;}
+.ans-tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;}
+.ans-tools button{
+  border:1px solid var(--border);background:transparent;color:var(--muted);
+  border-radius:8px;padding:4px 10px;font-size:11.5px;cursor:pointer;min-height:28px;font-family:inherit;
+}
+@media (hover:hover) and (pointer:fine){.ans-tools button:hover{color:var(--text);background:var(--surface-2);}}
+.ans-tools button[aria-pressed="true"]{color:var(--supervisor);border-color:var(--supervisor);}
+.ans-tools button:disabled{opacity:.55;cursor:wait;}
+.tom-tat:not(:empty){margin-top:10px;padding:10px 13px;border-radius:10px;background:var(--surface-2);}
+.tom-tat .lbl{font-size:11px;color:var(--muted);font-weight:650;display:block;margin-bottom:4px;letter-spacing:.02em;}
+.chu-btn{font-size:12.5px;font-weight:700;width:auto;padding:0 7px;}
+@media (pointer:coarse){.ans-tools button{min-height:44px;}}
 .md p{margin:0 0 9px;}
 .md p:last-child{margin-bottom:0;}
 .md ul,.md ol{margin:0 0 9px;padding-left:20px;}
@@ -579,6 +624,9 @@ body.gon .route,body.gon .agent-note{display:none;}
     <button class="icon-btn" id="btn-logout" title="Đăng xuất" type="button" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
     </button>
+    <button class="icon-btn" id="btn-profile" title="Hồ sơ của tôi" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+    </button>
     <button class="icon-btn" id="btn-theme" title="Đổi nền sáng / tối" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
     </button>
@@ -596,6 +644,8 @@ body.gon .route,body.gon .agent-note{display:none;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
     </button>
     <div class="title" id="top-title"><span>Cuộc trò chuyện mới</span></div>
+    <button class="icon-btn chu-btn" id="btn-chu-nho" title="Chữ nhỏ hơn" type="button">A−</button>
+    <button class="icon-btn chu-btn" id="btn-chu-to" title="Chữ to hơn" type="button">A+</button>
     <button class="icon-btn" id="btn-tai" title="Tải hội thoại về (.md)" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>
     </button>
@@ -625,6 +675,9 @@ body.gon .route,body.gon .agent-note{display:none;}
         </button>
         <button class="suggest" type="button" data-q="Tìm các bài báo mới về multi-agent system">
           <span class="dot" style="background:var(--research)"></span>Bài báo mới về multi-agent
+        </button>
+        <button class="suggest" type="button" data-q="Tìm cho tôi thông tin về cuộc phỏng vấn năm 2026 của Elon Musk">
+          <span class="dot" style="background:var(--research)"></span>Tin tức: phỏng vấn Elon Musk 2026
         </button>
         <button class="suggest" type="button" data-q="Trong ảnh này có mấy con vật và chúng màu gì?" data-need-image="1">
           <span class="dot" style="background:var(--vision)"></span>Đếm vật thể trong ảnh
@@ -662,6 +715,10 @@ body.gon .route,body.gon .agent-note{display:none;}
   <button type="button" data-act="pin">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6zM12 15v5"/></svg>
     <span data-label="pin">Ghim lên đầu</span>
+  </button>
+  <button type="button" data-act="move">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    Chuyển vào project
   </button>
   <button type="button" data-act="rename">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
@@ -705,6 +762,57 @@ body.gon .route,body.gon .agent-note{display:none;}
   </div>
 </div>
 
+<div class="modal" id="modal-profile">
+  <h3>Hồ sơ của tôi</h3>
+  <p class="sub">Agent đọc phần này ở mọi câu hỏi để trả lời hợp với bạn hơn — bạn không phải nhắc lại.</p>
+  <div class="field">
+    <label for="hs-ten">Tên gọi</label>
+    <input type="text" id="hs-ten" maxlength="120" placeholder="Ví dụ: Tuấn">
+  </div>
+  <div class="field">
+    <label for="hs-linh-vuc">Lĩnh vực / vai trò</label>
+    <input type="text" id="hs-linh-vuc" maxlength="200" placeholder="Ví dụ: sinh viên CNTT năm 4">
+  </div>
+  <div class="field">
+    <label for="hs-ghi-chu">Ghi chú cho agent</label>
+    <textarea id="hs-ghi-chu" rows="3" maxlength="500" placeholder="Ví dụ: trả lời ngắn gọn, ưu tiên bài báo từ 2022"></textarea>
+    <div class="note">Lưu trên server theo tài khoản của bạn, gửi kèm mỗi câu hỏi (tối đa 500 ký tự). <b>Đừng ghi</b> mật khẩu, số thẻ hay thông tin nhạy cảm. Bấm “Xoá hết” để xoá khỏi server.</div>
+  </div>
+  <div class="modal-actions">
+    <button class="btn danger" type="button" id="btn-xoa-profile">Xoá hết</button>
+    <button class="btn" type="button" data-dong="1">Đóng</button>
+    <button class="btn primary" type="button" id="btn-luu-profile">Lưu</button>
+  </div>
+</div>
+
+<div class="modal" id="modal-project">
+  <h3 id="pj-tieu-de">Project mới</h3>
+  <p class="sub">Gom các hội thoại cùng chủ đề. Hướng dẫn của project được gửi kèm mọi câu hỏi trong project đó.</p>
+  <div class="field">
+    <label for="pj-ten">Tên project</label>
+    <input type="text" id="pj-ten" maxlength="120" placeholder="Ví dụ: Luận văn tốt nghiệp">
+  </div>
+  <div class="field">
+    <label for="pj-hd">Hướng dẫn cho agent (tuỳ chọn)</label>
+    <textarea id="pj-hd" rows="3" maxlength="2000" placeholder="Ví dụ: luôn trả lời kèm trích dẫn, tập trung vào NLP"></textarea>
+  </div>
+  <div class="modal-actions">
+    <button class="btn danger" type="button" id="btn-xoa-project">Xoá project</button>
+    <button class="btn" type="button" data-dong="1">Huỷ</button>
+    <button class="btn primary" type="button" id="btn-luu-project">Lưu</button>
+  </div>
+</div>
+
+<div class="modal" id="modal-move">
+  <h3>Chuyển vào project</h3>
+  <p class="sub">Hội thoại chỉ thuộc tối đa một project.</p>
+  <div class="field"><select id="move-select"></select></div>
+  <div class="modal-actions">
+    <button class="btn" type="button" data-dong="1">Huỷ</button>
+    <button class="btn primary" type="button" id="btn-luu-move">Chuyển</button>
+  </div>
+</div>
+
 <div class="login-gate" id="login-gate">
   <div class="login-card">
     <h1>Visual Agentic AI</h1>
@@ -730,6 +838,8 @@ const LS_THEME = "vaai_theme";
 
 const AGENT_LABEL = { research_agent: "Research Agent", vision_agent: "Vision Agent" };
 const AGENT_CLASS = { research_agent: "research", vision_agent: "vision" };
+/* Agent chu de ben trong Research Agent (RESEARCH_ARCH=topics) */
+const TOPIC_LABEL = { scholar_agent: "Bài báo", explainer_agent: "Giải thích", news_agent: "Tin tức" };
 
 const LS_TOKEN = "vaai_token";
 
@@ -745,7 +855,16 @@ const state = {
   sending: false,
   menuFor: null,
   renameFor: null,
+  projects: [],
+  dongProject: {},     // project dang thu gon trong sidebar
+  projectMoi: "",      // hoi thoai moi se tao trong project nay
+  suaProject: null,    // id project dang sua trong modal (null = tao moi)
+  coChu: 1,
 };
+
+/* Ho so / project can biet "la ai": khach vang lai (server bat dang nhap ma chua
+   dang nhap) thi khong co. */
+function coDanhTinh() { return !state.loginRequired || !!state.user; }
 
 const $ = (id) => document.getElementById(id);
 
@@ -941,7 +1060,7 @@ function tenNguon(url) {
    trang nay duoc chinh FastAPI phuc vu va khong duoc phep phu thuoc CDN
    (may cham mang hoac mang truong chan CDN la giao dien vo).
    Moi thu deu escape TRUOC, the HTML chi duoc them vao sau do. */
-function renderMd(raw) {
+function renderMd(raw, linkMap) {
   if (!raw) return "";
   const kept = [];
   const keep = (html, isBlock) => {
@@ -949,7 +1068,7 @@ function renderMd(raw) {
     return "" + (kept.length - 1) + "";
   };
 
-  let s = escapeHtml(raw);
+  let s = escapeHtml(raw.replace(/【(\d{1,3})】/g, "[$1]"));
 
   s = s.replace(/```[a-zA-Z0-9]*\n?([\s\S]*?)```/g, (m, code) =>
     keep('<div class="code"><button class="copy-code" type="button" data-copy-code="1">Sao chép</button><pre><code>' +
@@ -963,6 +1082,14 @@ function renderMd(raw) {
   s = s.replace(/\[wikipedia:\s*([^\]\n]+)\]/gi, (m, page) =>
     keep('<a href="https://vi.wikipedia.org/wiki/' + encodeURIComponent(page.trim()) +
          '" target="_blank" rel="noopener">wikipedia: ' + page.trim() + "</a>"));
+  /* Ma tin tuc cua news_agent ("news: gn-1a2b3c4d") -> tieu de bai + link. Server
+     gui kem link_map (chi gom ma that su co trong cau tra loi), khong co thi giu chu. */
+  s = s.replace(/\[?news:\s*(gn-[0-9a-f]{8})\]?/gi, (m, id) => {
+    const l = (linkMap || {})[id.toLowerCase()];
+    if (!l) return m;
+    return keep('<a href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener">' + escapeHtml(l.title) +
+      "</a> — " + escapeHtml(l.source) + (l.date ? ", " + escapeHtml(l.date) : ""));
+  });
   s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)\]]+)/g, (m, pre, url) =>
     pre + keep('<a href="' + url + '" target="_blank" rel="noopener">' + url + "</a>"));
   /* Trich dan [n]: dong NGUON "[n] ..." thanh diem den (span), con [n] trong than bai
@@ -1048,38 +1175,63 @@ function nhomThoiGian(iso) {
   return "Trước đó";
 }
 
+function htmlConv(c, trongProject) {
+  return '<div class="conv' + (c.id === state.currentId ? " active" : "") + (trongProject ? " in-proj" : "") +
+      '" data-id="' + c.id + '" title="' + escapeHtml(c.title) + '">' +
+      (c.pinned ? '<svg class="pin-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6zM12 15v5"/></svg>' : "") +
+      '<div class="conv-name">' + escapeHtml(c.title) + "</div>" +
+      '<button class="conv-menu-btn" data-menu="' + c.id + '" title="Tuỳ chọn" aria-label="Tuỳ chọn" type="button">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>' +
+      "</button>" +
+    "</div>";
+}
+
 function renderSidebar() {
   const tu_khoa = $("search").value.trim().toLowerCase();
   const ds = state.conversations.filter((c) => !tu_khoa || (c.title || "").toLowerCase().includes(tu_khoa));
   const box = $("conv-list");
+  let html = "";
 
-  if (!ds.length) {
-    box.innerHTML = '<div class="conv-group">' +
+  /* Project len dau, moi project mot nhom thu gon/mo duoc */
+  if (coDanhTinh()) {
+    html += '<div class="conv-group">Project<button class="mini" type="button" data-proj-add="1">+ Mới</button></div>';
+    state.projects.forEach((p) => {
+      const cua = ds.filter((c) => c.project_id === p.id);
+      const mo = !state.dongProject[p.id];
+      html += '<div class="proj' + (!state.currentId && state.projectMoi === p.id ? " active" : "") + '">' +
+        '<button class="proj-name" type="button" data-proj-toggle="' + p.id + '" aria-expanded="' + mo + '">' +
+          (mo ? "▾ " : "▸ ") + escapeHtml(p.name) + '<span class="dem">' + cua.length + "</span></button>" +
+        '<button class="proj-btn" type="button" data-proj-new="' + p.id + '" title="Trò chuyện mới trong project" aria-label="Trò chuyện mới trong project">+</button>' +
+        '<button class="proj-btn" type="button" data-proj-edit="' + p.id + '" title="Sửa project" aria-label="Sửa project">⋯</button>' +
+        "</div>";
+      if (mo) html += cua.map((c) => htmlConv(c, true)).join("");
+    });
+  }
+
+  const coProject = new Set(state.projects.map((p) => p.id));
+  const conLai = ds.filter((c) => !c.project_id || !coProject.has(c.project_id));
+  if (!conLai.length && !state.projects.length) {
+    box.innerHTML = html + '<div class="conv-group">' +
       (tu_khoa ? "Không có hội thoại nào khớp" : "Chưa có hội thoại nào") + "</div>";
     return;
   }
-
-  let html = "";
   let nhomHienTai = null;
-  ds.forEach((c) => {
+  conLai.forEach((c) => {
     const nhom = c.pinned ? "Đã ghim" : nhomThoiGian(c.updated_at);
     if (nhom !== nhomHienTai) { html += '<div class="conv-group">' + nhom + "</div>"; nhomHienTai = nhom; }
-    html +=
-      '<div class="conv' + (c.id === state.currentId ? " active" : "") + '" data-id="' + c.id + '" title="' + escapeHtml(c.title) + '">' +
-        (c.pinned ? '<svg class="pin-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 4 3v2H6v-2l4-3-1-6zM12 15v5"/></svg>' : "") +
-        '<div class="conv-name">' + escapeHtml(c.title) + "</div>" +
-        '<button class="conv-menu-btn" data-menu="' + c.id + '" title="Tuỳ chọn" type="button">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>' +
-        "</button>" +
-      "</div>";
+    html += htmlConv(c, false);
   });
   box.innerHTML = html;
 }
 
 async function napDanhSach() {
   try {
-    const data = await api("/api/conversations?user_id=" + encodeURIComponent(state.userId));
+    const [data, pj] = await Promise.all([
+      api("/api/conversations?user_id=" + encodeURIComponent(state.userId)),
+      api("/api/projects?user_id=" + encodeURIComponent(state.userId)).catch(() => ({ projects: [] })),
+    ]);
     state.conversations = data.conversations || [];
+    state.projects = pj.projects || [];
     renderSidebar();
   } catch (e) {
     $("conv-list").innerHTML = '<div class="conv-group">Không tải được lịch sử</div>';
@@ -1091,7 +1243,10 @@ async function napDanhSach() {
  * ===================================================================== */
 function datTieuDeTren() {
   const c = state.conversations.find((x) => x.id === state.currentId);
-  $("top-title").innerHTML = c ? escapeHtml(c.title) : "<span>Cuộc trò chuyện mới</span>";
+  const pid = c ? c.project_id : state.projectMoi;
+  const p = state.projects.find((x) => x.id === pid);
+  const tienTo = p ? "<span>" + escapeHtml(p.name) + " / </span>" : "";
+  $("top-title").innerHTML = tienTo + (c ? escapeHtml(c.title) : "<span>Cuộc trò chuyện mới</span>");
 }
 
 function hienManChao(hien) {
@@ -1125,7 +1280,7 @@ function htmlBubbleUser(noiDung, anhBase64, soAnh) {
     (anhBase64 ? '<img src="data:image/jpeg;base64,' + anhBase64 + '" alt="Ảnh đã gửi">' + htmlSoAnh(soAnh) : "") + "</div>";
 }
 
-function htmlTuyenDuong(agentsUsed) {
+function htmlTuyenDuong(agentsUsed, trace) {
   const pill = (cls, text) => '<span class="pill ' + cls + '"><span class="led"></span>' + text + "</span>";
   let h = pill("supervisor", "Supervisor");
   if (!agentsUsed || !agentsUsed.length) {
@@ -1133,10 +1288,28 @@ function htmlTuyenDuong(agentsUsed) {
   } else {
     agentsUsed.forEach((n) => {
       h += '<span class="sep">→</span>' + pill(AGENT_CLASS[n] || "supervisor", AGENT_LABEL[n] || n);
+      if (n === "research_agent" && trace && trace.length) {
+        const ten = [...new Set(trace.map((t) => t.topic))];
+        h += ten.map((t) => pill("topic", TOPIC_LABEL[t] || t)).join("");
+      }
     });
     h += '<span class="sep">→</span>' + pill("supervisor", "Tổng hợp");
   }
   return '<div class="route">' + h + "</div>";
+}
+
+/* Agent chu de nao da chay, voi cau hoi con nao, ket qua ra sao - de nguoi cham
+   thay duoc kien truc multi-agent ngay tren giao dien. */
+function htmlTrace(trace) {
+  if (!trace || !trace.length) return "";
+  const trangThai = { ok: "có kết quả", no_data: "không đủ dữ liệu", error: "lỗi" };
+  return '<details class="trace"><summary>Chi tiết tra cứu (' + trace.length + " lượt agent chủ đề)</summary><ul>" +
+    trace.map((t) => "<li><b>" + escapeHtml(TOPIC_LABEL[t.topic] || t.topic) + "</b> — " + escapeHtml(t.sub_question || "") +
+      " · " + (trangThai[t.status] || escapeHtml(t.status || "")) +
+      (t.usage && t.usage.llm_calls ? " · " + t.usage.llm_calls + " lượt LLM" : "") +
+      (t.usage && t.usage.elapsed_ms ? " · " + (t.usage.elapsed_ms / 1000).toFixed(1) + "s" : "") +
+      (t.removed ? " · đã lược " + t.removed + " câu không có nguồn" : "") + "</li>").join("") +
+    "</ul></details>";
 }
 
 function htmlTraLoi(answer, extras) {
@@ -1146,18 +1319,25 @@ function htmlTraLoi(answer, extras) {
   if (e.warnings && e.warnings.length) {
     html += '<div class="warn">' + e.warnings.map(escapeHtml).join("<br>") + "</div>";
   }
-  html += htmlTuyenDuong(e.agents_used);
+  html += htmlTuyenDuong(e.agents_used, e.research_trace);
+  html += htmlTrace(e.research_trace);
 
   const tra = e.agent_answers || {};
   (e.agents_used || []).forEach((n) => {
     if (!tra[n]) return;
     html += '<div class="agent-note ' + (AGENT_CLASS[n] || "") + '">' +
-      '<span class="who">' + (AGENT_LABEL[n] || n) + "</span>" + renderMd(tra[n]) + "</div>";
+      '<span class="who">' + (AGENT_LABEL[n] || n) + "</span>" + renderMd(tra[n], e.link_map) + "</div>";
   });
 
   html += '<div class="answer"><div class="who">Supervisor' +
     '<button class="copy" type="button" data-copy="1">Sao chép</button></div>' +
-    '<div class="md">' + (renderMd(answer) || "<p>(không có nội dung trả về)</p>") + "</div></div>";
+    '<div class="md">' + (renderMd(answer, e.link_map) || "<p>(không có nội dung trả về)</p>") + "</div>" +
+    '<div class="ans-tools">' +
+      '<button type="button" data-sum="tldr">Tóm tắt</button>' +
+      '<button type="button" data-sum="de_hieu">Giải thích dễ hiểu</button>' +
+      '<button type="button" data-sum="y_chinh">Chỉ ý chính</button>' +
+      '<button type="button" data-speak="1" aria-pressed="false">Đọc to</button>' +
+    '</div><div class="tom-tat" aria-live="polite"></div></div>';
 
   if (e.counting && Object.keys(e.counting).length) {
     const chips = Object.entries(e.counting)
@@ -1209,8 +1389,9 @@ async function moHoiThoai(id) {
   }
 }
 
-function hoiThoaiMoi() {
+function hoiThoaiMoi(projectId) {
   state.currentId = null;
+  state.projectMoi = typeof projectId === "string" ? projectId : "";
   $("thread").innerHTML = "";
   hienManChao(true);
   renderSidebar();
@@ -1256,6 +1437,7 @@ async function gui(cauHoi, file) {
   body.append("question", cauHoi);
   body.append("user_id", state.userId);
   if (state.currentId) body.append("conversation_id", state.currentId);
+  else if (state.projectMoi) body.append("project_id", state.projectMoi);
   if (file) body.append("file", file);
 
   try {
@@ -1296,6 +1478,32 @@ async function gui(cauHoi, file) {
     capNhatNutGui();
     xuongCuoi();
   }
+}
+
+/* ===================================================================== *
+ * De tiep can: doc to, co chu (khong can LLM, lam bang trinh duyet)
+ * ===================================================================== */
+function docTo(text, nut) {
+  if (!("speechSynthesis" in window)) { toast("Trình duyệt không hỗ trợ đọc to."); return; }
+  const dangDoc = nut.getAttribute("aria-pressed") === "true";
+  speechSynthesis.cancel();
+  document.querySelectorAll('[data-speak][aria-pressed="true"]').forEach((b) => b.setAttribute("aria-pressed", "false"));
+  if (dangDoc) return;
+  const u = new SpeechSynthesisUtterance(text.replace(/\[\d{1,3}\]/g, ""));
+  u.lang = "vi-VN";
+  const giong = speechSynthesis.getVoices().find((v) => (v.lang || "").toLowerCase().startsWith("vi"));
+  if (giong) u.voice = giong;
+  u.onend = u.onerror = () => nut.setAttribute("aria-pressed", "false");
+  nut.setAttribute("aria-pressed", "true");
+  speechSynthesis.speak(u);
+}
+
+const CO_CHU = [0.9, 1, 1.1, 1.25, 1.4];
+function datCoChu(i) {
+  i = Math.max(0, Math.min(CO_CHU.length - 1, i));
+  state.coChu = i;
+  document.documentElement.style.setProperty("--co-chu", CO_CHU[i]);
+  try { localStorage.setItem("vaai_co_chu", String(i)); } catch (e) {}
 }
 
 /* ===================================================================== *
@@ -1360,6 +1568,15 @@ function ganSuKien() {
       moMenu(nutMenu.getAttribute("data-menu"), nutMenu);
       return;
     }
+    const nutPj = e.target.closest("[data-proj-add],[data-proj-edit],[data-proj-new],[data-proj-toggle]");
+    if (nutPj) {
+      const d = nutPj.dataset;
+      if (d.projAdd) moModalProject(null);
+      if (d.projEdit) moModalProject(d.projEdit);
+      if (d.projNew) hoiThoaiMoi(d.projNew);
+      if (d.projToggle) { state.dongProject[d.projToggle] = !state.dongProject[d.projToggle]; renderSidebar(); }
+      return;
+    }
     const item = e.target.closest(".conv");
     if (item) moHoiThoai(item.getAttribute("data-id"));
   });
@@ -1410,6 +1627,36 @@ function ganSuKien() {
     dong.classList.add("flash");
     setTimeout(() => dong.classList.remove("flash"), 1400);
   });
+
+  /* --- tom tat / giai thich de hieu / y chinh / doc to duoi moi cau tra loi --- */
+  $("thread").addEventListener("click", async (e) => {
+    const nutTT = e.target.closest("[data-sum]");
+    const nutDoc = e.target.closest("[data-speak]");
+    if (!nutTT && !nutDoc) return;
+    const khoi = e.target.closest(".answer");
+    const goc = khoi.querySelector(".md").innerText;
+    if (nutDoc) { docTo(goc, nutDoc); return; }
+    const hop = khoi.querySelector(".tom-tat");
+    const nhan = '<span class="lbl">' + escapeHtml(nutTT.textContent) + "</span>";
+    hop.innerHTML = nhan + "<em>Đang xử lý...</em>";
+    khoi.querySelectorAll("[data-sum]").forEach((b) => { b.disabled = true; });
+    const body = new FormData();
+    body.append("text", goc);
+    body.append("mode", nutTT.dataset.sum);
+    try {
+      const d = await api("/api/summarize", { method: "POST", body: body });
+      hop.innerHTML = nhan + '<div class="md">' + renderMd(d.summary) + "</div>";
+    } catch (err) {
+      hop.innerHTML = nhan + escapeHtml(err.message);
+    } finally {
+      khoi.querySelectorAll("[data-sum]").forEach((b) => { b.disabled = false; });
+    }
+  });
+
+  $("btn-chu-nho").onclick = () => datCoChu(state.coChu - 1);
+  $("btn-chu-to").onclick = () => datCoChu(state.coChu + 1);
+  /* Nut chi co icon: doc man hinh can aria-label, lay luon tu title. */
+  document.querySelectorAll("button[title]:not([aria-label])").forEach((b) => b.setAttribute("aria-label", b.title));
 
   /* --- tai hoi thoai ve .md: doc lai tu server de lay ban markdown goc --- */
   $("btn-tai").onclick = async () => {
@@ -1490,6 +1737,16 @@ function ganSuKien() {
   $("rename-input").addEventListener("keydown", (e) => { if (e.key === "Enter") xacNhanDoiTen(); });
 
   $("overlay").onclick = dongModal;
+  document.querySelectorAll("[data-dong]").forEach((b) => { b.onclick = dongModal; });
+
+  /* --- ho so cua toi --- */
+  $("btn-profile").onclick = moModalProfile;
+  $("btn-luu-profile").onclick = luuProfile;
+  $("btn-xoa-profile").onclick = xoaProfile;
+  /* --- project --- */
+  $("btn-luu-project").onclick = luuProject;
+  $("btn-xoa-project").onclick = xoaProject;
+  $("btn-luu-move").onclick = luuMove;
   document.addEventListener("click", () => $("conv-menu").classList.remove("show"));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") { dongModal(); $("conv-menu").classList.remove("show"); } });
 
@@ -1503,6 +1760,7 @@ function ganSuKien() {
     $("conv-menu").classList.remove("show");
     if (act === "pin") doiGhim(id);
     if (act === "rename") batDauDoiTen(id);
+    if (act === "move") moModalMove(id);
     if (act === "delete") xoa(id);
   });
 }
@@ -1576,12 +1834,128 @@ async function xoa(id) {
 }
 
 /* ===================================================================== *
+ * Ho so cua toi (muc 4)
+ * ===================================================================== */
+function canDanhTinh() {
+  if (coDanhTinh()) return true;
+  toast("Đăng nhập để dùng tính năng này.");
+  return false;
+}
+
+async function moModalProfile() {
+  if (!canDanhTinh()) return;
+  try {
+    const d = await api("/api/profile?user_id=" + encodeURIComponent(state.userId));
+    const p = d.profile || {};
+    $("hs-ten").value = p.display_name || "";
+    $("hs-linh-vuc").value = p.linh_vuc || "";
+    $("hs-ghi-chu").value = p.ghi_chu || "";
+    moModal("modal-profile");
+  } catch (e) { toast(e.message); }
+}
+
+async function luuProfile() {
+  const body = new FormData();
+  body.append("user_id", state.userId);
+  body.append("display_name", $("hs-ten").value);
+  body.append("linh_vuc", $("hs-linh-vuc").value);
+  body.append("ghi_chu", $("hs-ghi-chu").value);
+  try {
+    await api("/api/profile", { method: "PUT", body: body });
+    dongModal();
+    toast("Đã lưu hồ sơ. Agent sẽ dùng từ câu hỏi tiếp theo.");
+  } catch (e) { toast(e.message); }
+}
+
+async function xoaProfile() {
+  if (!confirm("Xoá toàn bộ hồ sơ của bạn khỏi server?")) return;
+  try {
+    await api("/api/profile?user_id=" + encodeURIComponent(state.userId), { method: "DELETE" });
+    ["hs-ten", "hs-linh-vuc", "hs-ghi-chu"].forEach((id) => { $(id).value = ""; });
+    dongModal();
+    toast("Đã xoá hồ sơ.");
+  } catch (e) { toast(e.message); }
+}
+
+/* ===================================================================== *
+ * Project (muc 6)
+ * ===================================================================== */
+function moModalProject(id) {
+  if (!canDanhTinh()) return;
+  const p = state.projects.find((x) => x.id === id);
+  state.suaProject = p ? p.id : null;
+  $("pj-tieu-de").textContent = p ? "Sửa project" : "Project mới";
+  $("pj-ten").value = p ? p.name : "";
+  $("pj-hd").value = p ? p.instructions : "";
+  $("btn-xoa-project").style.display = p ? "" : "none";
+  moModal("modal-project");
+  setTimeout(() => $("pj-ten").focus(), 50);
+}
+
+async function luuProject() {
+  const ten = $("pj-ten").value.trim();
+  if (!ten) { toast("Tên project không được để trống."); return; }
+  const body = new FormData();
+  body.append("user_id", state.userId);
+  body.append("name", ten);
+  body.append("instructions", $("pj-hd").value);
+  try {
+    const sua = state.suaProject;
+    await api("/api/projects" + (sua ? "/" + sua : ""), { method: sua ? "PATCH" : "POST", body: body });
+    dongModal();
+    await napDanhSach();
+    datTieuDeTren();
+    toast(sua ? "Đã lưu project." : "Đã tạo project. Bấm + cạnh tên project để trò chuyện trong đó.");
+  } catch (e) { toast(e.message); }
+}
+
+async function xoaProject() {
+  const p = state.projects.find((x) => x.id === state.suaProject);
+  if (!p) return;
+  if (!confirm('Xoá project "' + p.name + '"? Các hội thoại bên trong vẫn được giữ, chỉ bỏ nhóm.')) return;
+  try {
+    await api("/api/projects/" + p.id + "?user_id=" + encodeURIComponent(state.userId), { method: "DELETE" });
+    if (state.projectMoi === p.id) state.projectMoi = "";
+    dongModal();
+    await napDanhSach();
+    datTieuDeTren();
+    toast("Đã xoá project.");
+  } catch (e) { toast(e.message); }
+}
+
+function moModalMove(id) {
+  if (!canDanhTinh()) return;
+  if (!state.projects.length) { toast("Chưa có project nào — tạo bằng nút “+ Mới” ở thanh bên."); return; }
+  const c = state.conversations.find((x) => x.id === id);
+  state.renameFor = id;
+  $("move-select").innerHTML = '<option value="">(Không thuộc project nào)</option>' +
+    state.projects.map((p) => '<option value="' + p.id + '">' + escapeHtml(p.name) + "</option>").join("");
+  $("move-select").value = (c && c.project_id) || "";
+  moModal("modal-move");
+}
+
+async function luuMove() {
+  const body = new FormData();
+  body.append("user_id", state.userId);
+  body.append("project_id", $("move-select").value);
+  try {
+    await api("/api/conversations/" + state.renameFor, { method: "PATCH", body: body });
+    dongModal();
+    await napDanhSach();
+    datTieuDeTren();
+  } catch (e) { toast(e.message); }
+}
+
+/* ===================================================================== *
  * Khoi dong
  * ===================================================================== */
 (async function khoiDong() {
   state.userId = layUserId();
   state.apiBase = layApiBase();
   try { state.token = localStorage.getItem(LS_TOKEN) || ""; } catch (e) {}
+  let coChu = 1;
+  try { const v = localStorage.getItem("vaai_co_chu"); if (v !== null && !isNaN(+v)) coChu = +v; } catch (e) {}
+  datCoChu(coChu);
   ganSuKien();
   capNhatNutGui();
 

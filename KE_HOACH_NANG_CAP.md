@@ -11,9 +11,9 @@ Quy uoc: lam tung muc, commit nho, chay `.\chay.ps1 -Test` (khong ton luot API) 
 | - | 1 - Go tieng Viet khong dau **(BO QUA, da co san)** | Mot cong tac + mot ham, khong dong cham DB | nho |
 | 1 | 3 - Trinh bay van ban **(XONG)** | UI hien chua co bo render markdown, thay doi thay ngay | vua |
 | 2 | 5 - Mobile **(XONG, tru buoc thu may that)** | Lam sau muc 3 vi bang/code block anh huong bo cuc mobile | vua |
-| 2 | 2 - Tom tat / de tiep can | Can 1 endpoint moi + nut tren UI | vua |
-| 3 | 4 - Context theo tai khoan (diem cong) | Can bang moi + prompt, co van de rieng tu | lon |
-| 3 | 6 - Nhom project | Can doi schema DB (Neon dang chay that) | lon |
+| 2 | 2 - Tom tat / de tiep can **(XONG)** | Can 1 endpoint moi + nut tren UI | vua |
+| 3 | 4 - Context theo tai khoan (diem cong) **(XONG)** | Can bang moi + prompt, co van de rieng tu | lon |
+| 3 | 6 - Nhom project **(XONG)** | Can doi schema DB (Neon dang chay that) | lon |
 | 3 | 8 - Agent khac | Lam cuoi, moi agent la 1 goi rieng | tuy |
 
 ---
@@ -22,7 +22,10 @@ Quy uoc: lam tung muc, commit nho, chay `.\chay.ps1 -Test` (khong ton luot API) 
 
 Y cua ban la NGUOI DUNG go khong dau. Supervisor da xu ly (xem `app/agents/supervisor/prompts.py`: doc nhu co dau, tra loi co dau). Khong can lam gi them.
 
-## 2. Tom tat van ban va noi dung de tiep can hon
+## 2. Tom tat van ban va noi dung de tiep can hon - XONG
+
+Da lam: `POST /api/summarize` (vai tro `utility`), 4 nut duoi moi cau tra loi (Tom tat / Giai thich de hieu / Chi y chinh / Doc to bang speechSynthesis), nut A-/A+ (luu `vaai_co_chu`), aria-label tu dong cho nut chi co icon.
+
 
 - Endpoint moi `POST /api/summarize` nhan `text` + `mode` (`tldr` | `de_hieu` | `y_chinh`):
   - `tldr`: 3 gach dau dong.
@@ -47,7 +50,10 @@ Da lam trong `renderMd` (khong them thu vien): tieu de h3/h4, bang (boc `.tbl` c
 - Giu nguyen hop dong voi backend: van tra `answer` la markdown, khong doi API.
 - Kiem tra: mo 1 cau tra loi co bang + code + trich dan tren desktop va dien thoai.
 
-## 4. Context chung theo tai khoan (diem cong)
+## 4. Context chung theo tai khoan (diem cong) - XONG
+
+Da lam: bang `user_profiles`, `/api/profile` GET/PUT/DELETE, modal "Ho so cua toi". Chen vao DAU lich su bang cap tin nhan user/assistant (khong dung SystemMessage thu hai vi Gemini co the tu choi), moi phan cat 500 ky tu. Chua lam: pha 2 (agent de xuat ghi nho).
+
 
 Muc tieu: agent biet ten, so thich, ngu canh cua nguoi dung ma khong can nhac lai.
 - Bang moi `user_profiles` trong `app/store.py`: `user_id` (khoa), `display_name`, `ngon_ngu`, `linh_vuc` (vd "sinh vien CNTT"), `ghi_chu` (van ban tu do), `updated_at`. Bang moi thi `create_all` tao duoc, khong dung vao bang cu.
@@ -71,7 +77,10 @@ Git log cho thay da xu ly ban phim che khung nhap. Con lai:
 - Chi tiet "AI nao lam viec gi" gap lai tren mobile (lien quan muc 7).
 - Kiem tra: chup man hinh truoc/sau o 3 kich thuoc, khong duoc co thanh cuon ngang toan trang.
 
-## 6. Tinh nang nhom project
+## 6. Tinh nang nhom project - XONG
+
+Da lam theo de xuat bang noi `project_conversations` (khong ALTER bang cu). API `/api/projects` CRUD, `PATCH /api/conversations/{id}` nhan `project_id`, `/api/ask` nhan `project_id` cho hoi thoai moi. UI: sidebar nhom theo project (thu gon, nut + tro chuyen moi trong project), menu "Chuyen vao project". Huong dan project chen vao prompt nhu muc 4.
+
 
 - Bang `projects` (`id`, `user_id`, `name`, `instructions`, `created_at`) va cot `conversations.project_id` (cho phep NULL).
 - **Canh bao migration:** `metadata.create_all` chi tao bang moi, **khong them cot vao bang cu**. Neon dang co du lieu that nen: them buoc `ALTER TABLE conversations ADD COLUMN project_id ...` chay 1 lan luc khoi dong (kiem tra cot da co chua truoc khi them), hoac dung bang noi rieng `project_conversations` de khoi dung bang cu. De xuat: bang noi (an toan hon, khong can ALTER).
@@ -92,6 +101,9 @@ Backend da tach san: `answer`, `agents_used`, `agent_answers`, `warnings`. Chi c
 - Kiem tra: bat/tat cong tac, chi tiet van xem lai duoc, khong mat du lieu.
 
 ## 8. Mot so tinh nang AI Agent khac
+
+Da them (10/2026): `news_agent` - agent chu de thu 3 (Google News RSS, khong key) cho cau hoi tin tuc / phong van / su kien. Can `RESEARCH_ARCH=topics`. UI hien agent chu de nao da chay ("Chi tiet tra cuu") va doi ma `news: gn-...` thanh link bai bao.
+
 
 Them agent moi chi can dang ky trong registry (`app/agents/__init__.py`, quy tac IF-09), khong sua `chay.ps1`. Xep theo gia tri/cong:
 1. **Doc URL / PDF**: dan link bai bao -> tom tat, rut y chinh (nen dung lai tool fetch san co).

@@ -200,23 +200,67 @@ def _final_answer(result: dict) -> str:
         return ""
     last = messages[-1]
     content = last.get("content") if isinstance(last, dict) else getattr(last, "content", None)
-    return message_text(content)
+    return chuan_trich_dan(message_text(content))
+
+
+def chuan_trich_dan(text: str) -> str:
+    """gpt-oss hay viet trich dan kieu 【1】 thay vi [1] -> UI khong noi duoc toi NGUON."""
+    return re.sub(r"【(\d{1,3})】", r"[\1]", text or "")
 
 
 def _collect_tool_outputs(result: dict) -> Dict[str, str]:
     """Gom noi dung ToolMessage theo ten tool - cung logic voi _gom_ket_qua_tool
     trong app/main.py, chi khac la lam viec tren ket qua .invoke() (dict) thay
-    vi tung chunk cua .stream()."""
+    vi tung chunk cua .stream().
+
+    Supervisor-as-tool: tool BEN TRONG agent con (vd detect_and_count_objects)
+    khong nam trong state cua supervisor, ma nam trong artifact["tool_outputs"]
+    cua ToolMessage research_agent_tool / vision_agent_tool -> gom luon."""
     out: Dict[str, str] = {}
+    for m in _tool_messages(result):
+        name, content, artifact = m
+        if isinstance(artifact, dict):
+            out.update(artifact.get("tool_outputs") or {})
+        if name:
+            out[name] = content
+    return out
+
+
+def _tool_messages(result: dict):
+    """[(ten, noi dung text, artifact)] cua moi ToolMessage trong ket qua graph."""
+    ds = []
     messages = result.get("messages") if isinstance(result, dict) else None
     for m in messages or []:
-        get = m.get if isinstance(m, dict) else (lambda k, d=None: getattr(m, k, d))
+        get = m.get if isinstance(m, dict) else (lambda k, d=None, m=m: getattr(m, k, d))
         if get("type", None) != "tool":
             continue
-        name = get("name", "") or ""
-        if name:
-            out[name] = message_text(get("content", None))
-    return out
+        ds.append((get("name", "") or "", message_text(get("content", None)), get("artifact", None)))
+    return ds
+
+
+# Khuon do app/agents/research_agent/topics/news_agent/tools.py::dinh_dang() in ra.
+TIN_RE = re.compile(
+    r"Label: \[news: (gn-[0-9a-f]{8})\]\nTitle: (.*)\nSource: (.*?) \| Published: (.*)\nURL: (\S+)"
+)
+
+
+def _research_extras(result: dict, answer: str, response: dict) -> None:
+    """Them `research_trace` (agent chu de nao da chay) va `link_map` (ma tin gn-... ->
+    link bai bao) vao response. link_map chi giu ma THAT SU duoc trich trong cau tra
+    loi de extras luu xuong DB khong phinh."""
+    trace, bang_chung = [], []
+    for _ten, _noi_dung, artifact in _tool_messages(result):
+        if isinstance(artifact, dict):
+            trace += artifact.get("topics") or []
+            bang_chung.append(artifact.get("evidence") or "")
+    if trace:
+        response["research_trace"] = trace
+    links = {}
+    for ma, title, source, date, url in TIN_RE.findall("\n".join(bang_chung)):
+        if ma in (answer or ""):
+            links[ma] = {"url": url, "title": title, "source": source, "date": date}
+    if links:
+        response["link_map"] = links
 
 
 def _extract_vision_extras(tool_outputs: Dict[str, str], response: dict) -> None:
@@ -246,10 +290,9 @@ def _extract_agent_trace(result: dict):
     dung thu tu; (2) cau tra loi rieng cua tung agent con. Dung de UI hien thi
     dung con nao lam viec, thay vi chi thay 1 cau tra loi tong hop duy nhat.
 
-    Supervisor goi agent con nhu mot TOOL ("Supervisor as Tool", xem
-    app/agents/supervisor/tools.py): tool `vision_agent_tool` tra ve cau tra loi
-    cuoi cua vision_agent. Kieu handoff cu (`transfer_to_<agent>` + tin nhan AI
-    mang ten agent) van duoc nhan ra de khong vo ai con dung no."""
+    Ho tro ca hai kien truc: supervisor-as-tool (tool `research_agent_tool`,
+    cau tra loi cua agent con = noi dung ToolMessage) va kieu cu handoff
+    (`transfer_to_research_agent`, cau tra loi = AIMessage mang name agent)."""
     KNOWN_AGENTS = {"research_agent", "vision_agent"}
     TRANSFER_BACK_TEXT = "Transferring back to supervisor"
 
@@ -258,24 +301,21 @@ def _extract_agent_trace(result: dict):
 
     messages = result.get("messages") if isinstance(result, dict) else None
     for m in messages or []:
-        get = m.get if isinstance(m, dict) else (lambda k, d=None: getattr(m, k, d))
+        get = m.get if isinstance(m, dict) else (lambda k, d=None, m=m: getattr(m, k, d))
         mtype = get("type", None)
         name = get("name", None) or ""
-
-        if mtype == "tool" and name.endswith("_tool") and name[: -len("_tool")] in KNOWN_AGENTS:
-            agent_name = name[: -len("_tool")]
+        agent_name = ""
+        if mtype == "tool":
+            if name.startswith("transfer_to_"):
+                agent_name = name[len("transfer_to_") :]
+            elif name.endswith("_tool"):
+                agent_name = name[: -len("_tool")]
+        if agent_name in KNOWN_AGENTS:
             if agent_name not in agents_used:
                 agents_used.append(agent_name)
-            text = message_text(get("content", None)).strip()
-            # Dong "ERROR: ..." la loi ky thuat, da co `warnings` lo viec hien thi;
-            # khong de no thanh "cau tra loi" cua agent. Goi nhieu lan: giu lan moi nhat.
-            if text and not text.startswith("ERROR:"):
+            text = chuan_trich_dan(message_text(get("content", None))).strip()
+            if name.endswith("_tool") and text and not text.startswith("ERROR:"):
                 agent_answers[agent_name] = text
-
-        if mtype == "tool" and name.startswith("transfer_to_"):
-            agent_name = name[len("transfer_to_") :]
-            if agent_name in KNOWN_AGENTS and agent_name not in agents_used:
-                agents_used.append(agent_name)
 
         if mtype == "ai" and name in KNOWN_AGENTS:
             text = message_text(get("content", None)).strip()
@@ -298,6 +338,9 @@ _TEN_LOI_DE_HIEU = {
     "ARXIV_UNAVAILABLE": "Khong tra cuu duoc arXiv luc nay",
     "WIKIPEDIA_UNAVAILABLE": "Khong tra cuu duoc Wikipedia luc nay",
     "EMPTY_QUERY": "Thieu noi dung de tim kiem",
+    "NEWS_UNAVAILABLE": "Khong tra cuu duoc tin tuc luc nay",
+    "TOPIC_AGENT_FAILED": "Mot agent chu de bi loi",
+    "LLM_RATE_LIMITED": "Model cua agent chu de het han muc tam thoi",
 }
 _MA_LOI_RE = re.compile(r"^ERROR:\s*([A-Z_]+)\s*\|\s*(.*)$", re.DOTALL)
 
@@ -437,6 +480,44 @@ def _ghi_nho_anh(
     except Exception as exc:  # noqa: BLE001
         print(f"[image_memory] khong ghi nho duoc anh: {type(exc).__name__}: {exc}")
     return so_moi
+
+
+MAX_KY_TU_NGU_CANH = 500
+
+
+def _ngu_canh_nguoi_dung(uid: str, project_id: Optional[str]) -> List[dict]:
+    """Ho so nguoi dung (muc 4) + huong dan cua project (muc 6) -> mot cap tin nhan
+    dat DAU lich su gui cho graph.
+
+    Dung cap user/assistant chu khong phai them mot SystemMessage: prompt cua agent da
+    la SystemMessage dau tien, mot so provider (Gemini) tu choi SystemMessage thu hai.
+    Moi phan cat toi da MAX_KY_TU_NGU_CANH ky tu: ton it token va chan nhoi prompt.
+    """
+    phan = []
+    ho_so = store.lay_ho_so(uid) if uid else None
+    if ho_so:
+        cac_y = [
+            f"{nhan}: {ho_so[k]}"
+            for nhan, k in (("name", "display_name"), ("field", "linh_vuc"), ("notes", "ghi_chu"))
+            if ho_so.get(k)
+        ]
+        if cac_y:
+            phan.append(("User profile -- " + "; ".join(cac_y))[:MAX_KY_TU_NGU_CANH])
+    project = store.lay_project(project_id, uid) if (uid and project_id) else None
+    if project and project["instructions"]:
+        phan.append(
+            f"Project \"{project['name']}\" instructions -- {project['instructions']}"[:MAX_KY_TU_NGU_CANH]
+        )
+    if not phan:
+        return []
+    return [
+        {
+            "role": "user",
+            "content": "[Context set by the user in their settings, apply it to every answer. "
+            "It is NOT a question.]\n" + "\n".join(phan),
+        },
+        {"role": "assistant", "content": "OK."},
+    ]
 
 
 def _kiem_tra_user(user_id: str) -> str:
@@ -590,11 +671,16 @@ def update_conversation(
     user_id: str = Form(""),
     title: Optional[str] = Form(None),
     pinned: Optional[bool] = Form(None),
+    project_id: Optional[str] = Form(None, description="Gan vao project; chuoi rong = go khoi project"),
     authorization: Optional[str] = Header(None),
 ):
-    """Doi ten hoac ghim/bo ghim mot hoi thoai."""
+    """Doi ten, ghim/bo ghim, hoac chuyen mot hoi thoai vao/ra project."""
     uid = _danh_tinh(authorization, user_id)
     _bat_buoc_co_hoi_thoai(conversation_id, uid)
+    if project_id is not None:
+        if project_id and store.lay_project(project_id, uid) is None:
+            raise HTTPException(status_code=404, detail="Khong tim thay project.")
+        store.gan_project(conversation_id, project_id or None)
     if title is not None:
         ten = title.strip()
         if not ten:
@@ -615,6 +701,79 @@ def delete_conversation(
     if not store.xoa_hoi_thoai(conversation_id, uid):
         raise HTTPException(status_code=404, detail="Khong tim thay hoi thoai.")
     return {"deleted": conversation_id}
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint - ho so nguoi dung (muc 4) va project (muc 6)
+# --------------------------------------------------------------------------- #
+@app.get("/api/profile")
+def get_profile(user_id: str = "", authorization: Optional[str] = Header(None)):
+    uid = _danh_tinh(authorization, user_id)
+    return {"profile": store.lay_ho_so(uid)}
+
+
+@app.put("/api/profile")
+def put_profile(
+    user_id: str = Form(""),
+    display_name: str = Form(""),
+    linh_vuc: str = Form(""),
+    ghi_chu: str = Form(""),
+    authorization: Optional[str] = Header(None),
+):
+    """Ghi de ho so. Cat do dai o store.GIOI_HAN_HO_SO."""
+    uid = _danh_tinh(authorization, user_id)
+    return {"profile": store.luu_ho_so(uid, display_name=display_name, linh_vuc=linh_vuc, ghi_chu=ghi_chu)}
+
+
+@app.delete("/api/profile")
+def delete_profile(user_id: str = "", authorization: Optional[str] = Header(None)):
+    uid = _danh_tinh(authorization, user_id)
+    store.xoa_ho_so(uid)
+    return {"profile": None}
+
+
+@app.get("/api/projects")
+def list_projects(user_id: str = "", authorization: Optional[str] = Header(None)):
+    uid = _danh_tinh_tuy_chon(authorization, user_id)
+    return {"projects": store.danh_sach_project(uid) if uid else []}
+
+
+@app.post("/api/projects")
+def create_project(
+    name: str = Form(...),
+    instructions: str = Form(""),
+    user_id: str = Form(""),
+    authorization: Optional[str] = Header(None),
+):
+    uid = _danh_tinh(authorization, user_id)
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="Ten project khong duoc de trong.")
+    return store.tao_project(uid, name, instructions)
+
+
+@app.patch("/api/projects/{project_id}")
+def update_project(
+    project_id: str,
+    name: Optional[str] = Form(None),
+    instructions: Optional[str] = Form(None),
+    user_id: str = Form(""),
+    authorization: Optional[str] = Header(None),
+):
+    uid = _danh_tinh(authorization, user_id)
+    if name is not None and not name.strip():
+        raise HTTPException(status_code=400, detail="Ten project khong duoc de trong.")
+    if not store.sua_project(project_id, uid, name, instructions):
+        raise HTTPException(status_code=404, detail="Khong tim thay project.")
+    return store.lay_project(project_id, uid)
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: str, user_id: str = "", authorization: Optional[str] = Header(None)):
+    """Xoa project, KHONG xoa hoi thoai ben trong (chi go nhom)."""
+    uid = _danh_tinh(authorization, user_id)
+    if not store.xoa_project(project_id, uid):
+        raise HTTPException(status_code=404, detail="Khong tim thay project.")
+    return {"deleted": project_id}
 
 
 # --------------------------------------------------------------------------- #
@@ -706,6 +865,7 @@ def ask_supervisor(
     question: str = Form(..., description="Cau hoi bat ky - supervisor tu chon agent con phu hop"),
     user_id: str = Form("", description="Id ngau nhien trinh duyet tu sinh, de tach lich su"),
     conversation_id: str = Form("", description="De trong = mo hoi thoai moi"),
+    project_id: str = Form("", description="Chi dung khi mo hoi thoai moi: tao luon trong project nay"),
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
     ),
@@ -743,6 +903,10 @@ def ask_supervisor(
                 # theo HISTORY_MAX_TURNS nhu phan chu cua lich su.
                 ds_anh = store.danh_sach_anh(conversation_id, settings.image_memory_max)
                 lich_su = _lich_su_cho_graph(conversation_id, {a["stt"] for a in ds_anh})
+                project_id = hoi_thoai.get("project_id") or ""
+            elif project_id and store.lay_project(project_id, uid) is None:
+                project_id = ""
+            lich_su = _ngu_canh_nguoi_dung(uid, project_id) + lich_su
             # Hoi thoai moi: CHUA tao trong database o day. Tao som roi lo agent
             # loi giua chung (vd Gemini qua tai 503) se de lai mot hoi thoai
             # rong khong co tin nhan nao, hien trong sidebar nhung mo ra trong
@@ -802,6 +966,7 @@ def ask_supervisor(
         if agent_answers:
             response["agent_answers"] = agent_answers
         _extract_vision_extras(tool_outputs, response)
+        _research_extras(result, answer, response)
 
         warnings = [
             _canh_bao_de_doc(name, text)
@@ -815,6 +980,8 @@ def ask_supervisor(
             if hoi_thoai is None:
                 # Hoi thoai moi: chi tao khi da chac chan co cau tra loi de luu.
                 hoi_thoai = store.tao_hoi_thoai(uid, store.dat_tieu_de(question))
+                if project_id:
+                    store.gan_project(hoi_thoai["id"], project_id)
             cid = hoi_thoai["id"]
             extras_user: dict = {}
             # Dieu vua biet ve anh = cau tra loi cua vision agent trong luot nay.
@@ -850,6 +1017,50 @@ def ask_supervisor(
         return response
     except HTTPException:
         raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint - tom tat / viet lai de doc (muc 2 KE_HOACH_NANG_CAP)
+# --------------------------------------------------------------------------- #
+_CHE_DO_TOM_TAT = {
+    "tldr": "Summarize the text below in exactly 3 short bullet points, each starting with '- '.",
+    "de_hieu": (
+        "Rewrite the text below so a first-year student understands it: short sentences, "
+        "simple words, and explain each technical term in brackets the first time it appears."
+    ),
+    "y_chinh": (
+        "Keep ONLY the conclusions and the important numbers, dates and names from the text "
+        "below, as bullet points starting with '- '."
+    ),
+}
+_LUAT_TOM_TAT = (
+    " Write in the same language as the text (Vietnamese WITH full diacritics if the text is "
+    "Vietnamese). Keep citation numbers such as [1] exactly as they are. Do NOT add any "
+    "information that is not in the text. Output only the result, no preamble."
+)
+MAX_KY_TU_TOM_TAT = 8000
+
+
+@app.post("/api/summarize")
+def summarize(
+    text: str = Form(..., description="Cau tra loi can tom tat / viet lai"),
+    mode: str = Form("tldr", description="tldr | de_hieu | y_chinh"),
+):
+    """Mot luot LLM vai tro "utility" (model nhe), khong qua supervisor, khong luu DB."""
+    if mode not in _CHE_DO_TOM_TAT:
+        raise HTTPException(status_code=400, detail=f"mode phai la mot trong {sorted(_CHE_DO_TOM_TAT)}")
+    noi_dung = (text or "").strip()[:MAX_KY_TU_TOM_TAT]
+    if not noi_dung:
+        raise HTTPException(status_code=400, detail="Khong co noi dung de tom tat.")
+    try:
+        from app.core import llm
+
+        ket_qua = llm.get_llm("utility").invoke(
+            [("system", _CHE_DO_TOM_TAT[mode] + _LUAT_TOM_TAT), ("user", noi_dung)]
+        )
+        return {"mode": mode, "summary": message_text(ket_qua.content).strip()}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
 

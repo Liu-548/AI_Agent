@@ -52,16 +52,42 @@ def reset_sub_agent_instances():
     _vision_agent_instance = None
 
 
-@tool("research_agent_tool")
-def research_tool(query: str) -> str:
-    """Useful for searching scientific papers, arXiv, Wikipedia, or retrieving technical research information.
-    Input should be a clear research query.
+def _chay_agent_con(agent, query: str, config: Optional[dict] = None):
+    """Chạy agent con, trả (câu trả lời cuối, artifact cho web UI).
+
+    artifact KHÔNG gửi cho LLM của supervisor (response_format="content_and_artifact"),
+    chỉ nằm trong ToolMessage.artifact để app/api.py đọc: kết quả tool bên trong
+    agent con (ảnh khoanh vùng của YOLO...), các agent chủ đề đã chạy, bằng chứng.
+    Không có lớp này thì supervisor-as-tool "nuốt" hết, UI chỉ thấy câu trả lời trần.
     """
-    agent = get_research_agent()
+    from langchain_core.messages import ToolMessage
+
+    from app.core.pretty import message_text
+
     result = agent.invoke({"messages": [("user", query)]})
-    if isinstance(result, dict) and "messages" in result:
-        return result["messages"][-1].content
-    return str(result)
+    chuyen_ket_qua_tool_con(result, config)
+    messages = result.get("messages", []) if isinstance(result, dict) else []
+    if not messages:
+        return str(result), {}
+    tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
+    topics, bang_chung = [], []
+    for m in tool_msgs:
+        a = m.artifact if isinstance(m.artifact, dict) else {}
+        if "topic" in a:  # agent chủ đề của research lead (RESEARCH_ARCH=topics)
+            topics.append({
+                "topic": a["topic"], "status": a.get("status"), "sub_question": a.get("sub_question", ""),
+                "usage": a.get("usage", {}), "removed": (a.get("grounding_report") or {}).get("removed", 0),
+            })
+            bang_chung.append(a.get("evidence_text") or "")
+        else:
+            bang_chung.append(message_text(m.content))
+    artifact = {
+        "tool_outputs": {m.name: message_text(m.content) for m in tool_msgs if m.name},
+        "topics": topics,
+        "evidence": "\n".join(bang_chung),
+        "grounding": (getattr(messages[-1], "response_metadata", None) or {}).get("grounding"),
+    }
+    return message_text(messages[-1].content), artifact
 
 
 def so_bi_danh(query: str, image_path: Optional[str]) -> Optional[int]:
@@ -155,10 +181,19 @@ def giai_bi_danh_anh(
     return duong_dan, None
 
 
-@tool("vision_agent_tool")
+@tool("research_agent_tool", response_format="content_and_artifact")
+def research_tool(query: str):
+    """Use for ANY information question: scientific papers (arXiv, OpenAlex...), explanations
+    of concepts (Wikipedia), and recent news, interviews or events (news search).
+    Input should be a clear, self-contained question.
+    """
+    return _chay_agent_con(get_research_agent(), query)
+
+
+@tool("vision_agent_tool", response_format="content_and_artifact")
 def vision_tool(
     query: str, image_path: Optional[str] = None, config: RunnableConfig = None
-) -> str:
+):
     """Useful for analyzing images, object detection/counting with YOLO, or visual description.
     Input should be a clear query describing what to analyze or detect.
     `image_path` is the image to look at: an id from IMAGE MEMORY such as "IMG3",
@@ -167,9 +202,7 @@ def vision_tool(
     so_anh = so_bi_danh(query, image_path)
     image_path, loi = giai_bi_danh_anh(query, image_path, config)
     if loi:
-        return loi
-
-    agent = get_vision_agent()
+        return loi, {}
 
     # Ghép image_path vào query nếu Supervisor truyền riêng biệt
     full_query = query
@@ -182,12 +215,8 @@ def vision_tool(
         # Đường nhanh: một lượt model nhìn ảnh và trả lời luôn (xem VISION_DIRECT).
         nhanh = thu_tra_loi_truc_tiep(query, image_path)
         if nhanh is not None:
-            return nhanh
-        result = agent.invoke({"messages": [("user", full_query)]})
-        chuyen_ket_qua_tool_con(result, config)
-    if isinstance(result, dict) and "messages" in result:
-        return result["messages"][-1].content
-    return str(result)
+            return nhanh, {}
+        return _chay_agent_con(get_vision_agent(), full_query, config)
 
 
 def make_sub_agent_tool(agent: Any) -> BaseTool:

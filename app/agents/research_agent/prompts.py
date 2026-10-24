@@ -182,7 +182,9 @@ citation number such as [1]. No nesting, no bold.>
 NGUỒN
 [1] <one label copied CHARACTER BY CHARACTER from a topic result, written WITHOUT its
     square brackets: http://arxiv.org/abs/2104.09864v5 | doi: 10.1234/abc | pmid: 123 |
-    openalex: W123456789 | wikipedia: Page name | news: gn-1a2b3c4d>
+    openalex: W123456789 | wikipedia: Page name | news: gn-1a2b3c4d |
+    github: owner/repo | stackoverflow: 12345 | wikivoyage: Page name | osm: way/123 |
+    openlibrary: OL45804W | musicbrainz: recording/1a2b3c4d>
 [2] ...
 
 RULES FOR THE ANSWER:

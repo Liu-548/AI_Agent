@@ -177,7 +177,9 @@ def test_research_arch_topics_dung_lead(monkeypatch):
     monkeypatch.setattr(config, "settings", replace(config.settings, research_arch="topics"))
     agent = build_research_agent(model=FakeToolCallingModel())
     assert agent.name == "research_agent"
-    assert _ten_tool(agent) == {"scholar_agent", "explainer_agent", "news_agent"}
+    assert _ten_tool(agent) == {
+        "scholar_agent", "explainer_agent", "news_agent", "code_agent", "travel_agent", "culture_agent",
+    }
     assert "post_model_hook" in agent.nodes
 
 

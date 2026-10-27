@@ -619,6 +619,52 @@ def get_conversation(
     return hoi_thoai
 
 
+def _thumb_nho_tu_bytes(raw: Optional[bytes], canh: int = 200) -> str:
+    """Anh nho (canh dai toi da `canh` px) dang base64 cho thu vien anh."""
+    if not raw:
+        return ""
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(raw)) as im:
+            im = im.convert("RGB")
+            im.thumbnail((canh, canh))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=70)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:  # noqa: BLE001 - thieu anh nho khong dang lam hong request
+        return ""
+
+
+@app.get("/api/conversations/{conversation_id}/images")
+def list_conversation_images(
+    conversation_id: str,
+    user_id: str = "",
+    authorization: Optional[str] = Header(None),
+):
+    """Thu vien anh cua hoi thoai: cac anh dang duoc bo nho anh nho, kem ho so AI
+    da lap (chu de, mau sac, boi canh...) va anh nho. Chi doc, khong goi model."""
+    uid = _danh_tinh(authorization, user_id)
+    _bat_buoc_co_hoi_thoai(conversation_id, uid)
+    ket_qua: List[dict] = []
+    for anh in store.danh_sach_anh(conversation_id, settings.image_memory_max):
+        ho_so = anh.get("profile") or {}
+        muc = {
+            "stt": anh["stt"],
+            "con_anh": bool(anh.get("con_anh")),
+            "notes": [g for g in ho_so.get("notes", []) if isinstance(g, str)],
+        }
+        for ten in image_memory.TRUONG_HO_SO:
+            muc[ten] = ho_so.get(ten, "")
+        muc["thumb_base64"] = (
+            _thumb_nho_tu_bytes(store.lay_du_lieu_anh(conversation_id, anh["stt"]))
+            if muc["con_anh"]
+            else ""
+        )
+        ket_qua.append(muc)
+    return {"images": ket_qua}
+
+
 @app.patch("/api/conversations/{conversation_id}")
 def update_conversation(
     conversation_id: str,

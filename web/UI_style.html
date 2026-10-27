@@ -594,6 +594,69 @@ body.gon .route,body.gon .agent-note{display:none;}
 .send.dung .i-dung{display:block;}
 .hint{text-align:center;font-size:11px;color:var(--muted);margin-top:9px;}
 
+/* ---- chip goi y theo anh + thu vien anh cua hoi thoai ---- */
+.chips-anh{display:none;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.chips-anh.show{display:flex;}
+.chip-nhanh{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;
+  border:1px solid var(--border);background:var(--surface);color:var(--text);
+  font-family:inherit;font-size:13px;font-weight:550;cursor:pointer;white-space:nowrap;
+  transition:border-color .15s,background-color .15s,color .15s;
+}
+.chip-nhanh svg{width:15px;height:15px;flex-shrink:0;}
+.chip-nhanh:hover{border-color:var(--vision);}
+.chip-nhanh.on{border-color:var(--vision);background:color-mix(in srgb,var(--vision) 16%,transparent);color:var(--vision);}
+
+.tv-nut{
+  display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);
+  color:var(--vision);border-radius:999px;padding:5px 11px;font-family:inherit;font-size:12.5px;
+  font-weight:600;cursor:pointer;
+}
+.tv-nut[hidden]{display:none;}
+.tv-nut svg{width:14px;height:14px;}
+.tv-nen{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:none;}
+.tv-nen.show{display:block;}
+.tv{
+  position:fixed;z-index:61;top:0;right:0;bottom:0;width:360px;max-width:100vw;
+  background:var(--bg-soft);border-left:1px solid var(--border);box-shadow:var(--shadow);
+  display:flex;flex-direction:column;transform:translateX(105%);visibility:hidden;
+  transition:transform .28s ease,visibility 0s .28s;
+}
+.tv.show{transform:none;visibility:visible;transition:transform .28s ease;}
+.tv-dau{display:flex;align-items:center;gap:8px;padding:14px 14px 4px 18px;}
+.tv-tt{flex:1;font-size:15px;font-weight:650;}
+.tv-tt span{font-weight:500;color:var(--muted);}
+.tv-ghichu{padding:0 18px 10px;font-size:12px;color:var(--muted);line-height:1.5;}
+.tv-ds{flex:1;overflow-y:auto;padding:4px 14px 18px;display:flex;flex-direction:column;gap:10px;}
+.tv-the{display:flex;gap:12px;padding:10px;border:1px solid var(--border);background:var(--surface);border-radius:13px;}
+.tv-anh{position:relative;width:64px;height:80px;flex-shrink:0;border-radius:9px;overflow:hidden;background:var(--surface-2);}
+.tv-anh img{width:100%;height:100%;object-fit:cover;display:block;}
+.tv-no{position:absolute;left:4px;top:4px;font-size:10px;font-weight:650;background:rgba(10,12,17,.8);color:#f6c27f;padding:0 6px;border-radius:5px;}
+.tv-gone{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--muted);text-align:center;padding:0 4px;}
+.tv-thong{flex:1;min-width:0;display:flex;flex-direction:column;}
+.tv-t1{font-size:13.5px;font-weight:600;}
+.tv-mt{font-size:12px;color:var(--text-2);line-height:1.4;margin-top:1px;}
+.tv-chan{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto;padding-top:6px;}
+.tv-tag{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:0 8px;}
+.tv-hoi{
+  font-family:inherit;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 11px;
+}
+.tv-hoi:hover{border-color:var(--vision);}
+.tv-trong{padding:26px 8px;text-align:center;font-size:13px;color:var(--muted);}
+@media (max-width:860px){
+  .tv{
+    top:auto;left:0;right:0;width:auto;height:78vh;max-width:none;
+    border-left:none;border-top:1px solid var(--border);border-radius:22px 22px 0 0;
+    transform:translateY(105%);
+  }
+  .tv-ds{padding-bottom:max(18px,env(safe-area-inset-bottom));}
+  .chips-anh{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;}
+  .chip-nhanh{min-height:44px;}
+  .tv-nut span.chu{display:none;}
+}
+@media (prefers-reduced-motion:reduce){.tv{transition:none;}}
+
 /* ============================ CAI DAT ============================ */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90;display:none;}
 .overlay.show{display:block;}
@@ -758,12 +821,28 @@ body.gon .route,body.gon .agent-note{display:none;}
 
 <div class="scrim" id="scrim"></div>
 
+<div class="tv-nen" id="tv-nen"></div>
+<aside class="tv" id="tv" aria-label="Ảnh trong hội thoại" aria-hidden="true">
+  <div class="tv-dau">
+    <div class="tv-tt">Ảnh trong hội thoại <span id="tv-dem"></span></div>
+    <button class="icon-btn" id="tv-dong" type="button" aria-label="Đóng">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="tv-ghichu">Hệ thống chỉ nhớ một số ảnh gần nhất của mỗi hội thoại. Mô tả bên dưới là hồ sơ AI đã lập cho từng ảnh.</div>
+  <div class="tv-ds" id="tv-ds"></div>
+</aside>
+
 <main class="main">
   <div class="topbar">
     <button class="icon-btn" id="btn-open" title="Hiện thanh bên" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
     </button>
     <div class="title" id="top-title"><span>Cuộc trò chuyện mới</span></div>
+    <button class="tv-nut" id="btn-thuvien" type="button" hidden title="Ảnh trong hội thoại" aria-label="Ảnh trong hội thoại">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span class="chu">Ảnh</span><b id="tv-so">0</b>
+    </button>
     <button class="icon-btn" id="btn-tai" title="Tải hội thoại về (.md)" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>
     </button>
@@ -811,6 +890,7 @@ body.gon .route,body.gon .agent-note{display:none;}
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
+      <div class="chips-anh" id="chips-anh" aria-label="Gợi ý cho ảnh này"></div>
       <form class="bar" id="form">
         <button type="button" class="icon-btn" id="btn-attach" title="Đính kèm ảnh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.1a3.7 3.7 0 1 1 5.2 5.2l-9.2 9.1a1.8 1.8 0 1 1-2.6-2.6l8.5-8.4"/></svg>
@@ -1432,6 +1512,7 @@ async function moHoiThoai(id) {
     renderTinNhan(data.messages);
     renderSidebar();
     datTieuDeTren();
+    napThuVien();
     if (window.innerWidth <= 860) document.body.classList.add("sidebar-hidden");
   } catch (e) {
     toast(e.message);
@@ -1440,6 +1521,7 @@ async function moHoiThoai(id) {
 
 function hoiThoaiMoi() {
   state.currentId = null;
+  napThuVien();
   $("thread").innerHTML = "";
   hienManChao(true);
   renderSidebar();
@@ -1631,6 +1713,7 @@ async function gui(cauHoi, file) {
     }
     await napDanhSach();
     datTieuDeTren();
+    if (file) napThuVien();
   } catch (e) {
     const dots = turn.querySelector(".cho");
     const daDung = e && e.name === "AbortError";
@@ -1661,6 +1744,91 @@ async function gui(cauHoi, file) {
 }
 
 /* ===================================================================== *
+ * Chip goi y theo anh + thu vien anh cua hoi thoai
+ * ===================================================================== */
+const CHIP_ANH = [
+  { nhan: "Mô tả ảnh", q: "Mô tả chi tiết bức ảnh này.", icon: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
+  { nhan: "Đếm vật thể", q: "Trong ảnh có mấy con vật và chúng màu gì?", icon: "M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M9 9h6v6H9z" },
+  { nhan: "Đây là loài/giống gì?", q: "Đây là loài hoặc giống gì?", icon: "M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z" },
+  { nhan: "Đọc chữ trong ảnh", q: "Đọc toàn bộ chữ có trong ảnh.", icon: "M4 7V4h16v3M9 20h6M12 4v16" },
+  { nhan: "Tìm bài báo liên quan", q: "Mô tả ảnh rồi tìm bài báo về chủ đề này.", icon: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5V21h16" },
+];
+const TEN_CHU_DE = { animal: "động vật", travel: "du lịch", food: "ẩm thực", document: "tài liệu", general: "chung" };
+
+function veChipAnh() {
+  $("chips-anh").innerHTML = CHIP_ANH.map((c, i) =>
+    '<button type="button" class="chip-nhanh" data-chip="' + i + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + c.icon + '"/></svg>' +
+    escapeHtml(c.nhan) + "</button>").join("");
+}
+
+function capNhatChipAnh() {
+  const hop = $("chips-anh");
+  hop.classList.toggle("show", !!fileDinhKem && !state.sending);
+  if (!fileDinhKem) hop.querySelectorAll(".chip-nhanh").forEach((b) => b.classList.remove("on"));
+}
+
+async function napThuVien() {
+  const cid = state.currentId;
+  state.anh = [];
+  if (cid) {
+    try {
+      const d = await api("/api/conversations/" + cid + "/images?user_id=" + encodeURIComponent(state.userId));
+      if (cid === state.currentId) state.anh = d.images || [];
+    } catch (e) { state.anh = []; }
+  }
+  if (cid !== state.currentId) return;
+  const co = state.anh.length > 0;
+  $("btn-thuvien").hidden = !co;
+  $("tv-so").textContent = state.anh.length;
+  if (!co) dongThuVien();
+  else if ($("tv").classList.contains("show")) veThuVien();
+}
+
+function veThuVien() {
+  $("tv-dem").textContent = "· " + state.anh.length;
+  if (!state.anh.length) { $("tv-ds").innerHTML = '<div class="tv-trong">Chưa có ảnh nào trong hội thoại này.</div>'; return; }
+  $("tv-ds").innerHTML = state.anh.map((a) => {
+    const sl = Number(a.count) > 1 ? " ×" + Number(a.count) : "";
+    const tieuDe = (a.subject || "Ảnh " + a.stt) + sl;
+    const mota = [a.colors, a.scene].filter(Boolean).join(" · ") || (a.notes && a.notes[0]) || "Chưa có mô tả";
+    const tag = TEN_CHU_DE[a.topic] || "";
+    const anh = a.con_anh && a.thumb_base64
+      ? '<img src="data:image/jpeg;base64,' + a.thumb_base64 + '" alt="Ảnh ' + a.stt + '">'
+      : '<span class="tv-gone">File đã dọn</span>';
+    const nut = a.con_anh
+      ? '<button type="button" class="tv-hoi" data-tv-hoi="' + a.stt + '">Hỏi về ảnh này</button>'
+      : '<button type="button" class="tv-hoi" data-tv-lai="' + a.stt + '">Gửi lại ảnh</button>';
+    return '<div class="tv-the"><div class="tv-anh">' + anh + '<span class="tv-no">Ảnh ' + a.stt + "</span></div>" +
+      '<div class="tv-thong"><div class="tv-t1">' + escapeHtml(tieuDe) + '</div><div class="tv-mt">' + escapeHtml(mota) +
+      '</div><div class="tv-chan">' + (tag ? '<span class="tv-tag">' + tag + "</span>" : "<span></span>") + nut + "</div></div></div>";
+  }).join("");
+}
+
+function moThuVien() {
+  veThuVien();
+  $("tv").classList.add("show");
+  $("tv-nen").classList.add("show");
+  $("tv").setAttribute("aria-hidden", "false");
+  $("tv-dong").focus();
+}
+function dongThuVien() {
+  $("tv").classList.remove("show");
+  $("tv-nen").classList.remove("show");
+  $("tv").setAttribute("aria-hidden", "true");
+}
+/* Chen "Anh N: " vao dau o nhap de cau hoi nham dung anh do. */
+function hoiVeAnh(stt) {
+  dongThuVien();
+  const ta = $("question");
+  ta.value = "Ảnh " + stt + ": " + ta.value.replace(/^Ảnh \d+:\s*/, "");
+  tuGianTextarea();
+  capNhatNutGui();
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+/* ===================================================================== *
  * O nhap
  * ===================================================================== */
 let fileDinhKem = null;
@@ -1668,16 +1836,18 @@ let fileDinhKem = null;
 function datFile(f) {
   fileDinhKem = f || null;
   const chip = $("filechip");
-  if (!f) { chip.classList.remove("show"); $("file-input").value = ""; capNhatNutGui(); return; }
+  if (!f) { chip.classList.remove("show"); $("file-input").value = ""; capNhatNutGui(); capNhatChipAnh(); return; }
   $("filechip-name").textContent = f.name;
   $("filechip-img").src = URL.createObjectURL(f);
   chip.classList.add("show");
   capNhatNutGui();
+  capNhatChipAnh();
 }
 
 function capNhatNutGui() {
   /* Dang cho tra loi: nut Gui thanh nut Dung (luon bam duoc). */
   const nut = $("btn-send");
+  capNhatChipAnh();
   const nhan = state.sending ? "Dừng" : "Gửi";
   nut.classList.toggle("dung", !!state.sending);
   nut.title = nhan;
@@ -1756,6 +1926,31 @@ function ganSuKien() {
       () => toast("Đã sao chép câu trả lời."),
       () => toast("Trình duyệt không cho phép sao chép.")
     );
+  });
+
+  /* --- chip goi y theo anh: dien san cau hoi vao o nhap, KHONG tu gui --- */
+  veChipAnh();
+  $("chips-anh").addEventListener("click", (e) => {
+    const nut = e.target.closest("[data-chip]");
+    if (!nut) return;
+    const ta2 = $("question");
+    ta2.value = CHIP_ANH[Number(nut.dataset.chip)].q;
+    tuGianTextarea();
+    capNhatNutGui();
+    ta2.focus();
+    $("chips-anh").querySelectorAll(".chip-nhanh").forEach((b) => b.classList.toggle("on", b === nut));
+  });
+
+  /* --- thu vien anh --- */
+  $("btn-thuvien").onclick = moThuVien;
+  $("tv-dong").onclick = dongThuVien;
+  $("tv-nen").onclick = dongThuVien;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") dongThuVien(); });
+  $("tv-ds").addEventListener("click", (e) => {
+    const hoi = e.target.closest("[data-tv-hoi]");
+    if (hoi) { hoiVeAnh(hoi.dataset.tvHoi); return; }
+    const lai = e.target.closest("[data-tv-lai]");
+    if (lai) { hoiVeAnh(lai.dataset.tvLai); $("file-input").click(); }
   });
 
   /* --- khung vat the: bam khung / dong de lam noi bat, nut An/Hien khung --- */

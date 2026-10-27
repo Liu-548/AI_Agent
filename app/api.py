@@ -285,6 +285,41 @@ def _extract_vision_extras(tool_outputs: Dict[str, str], response: dict) -> None
         Path(annotated).unlink(missing_ok=True)
 
 
+def _bo_sung_khung_yolo(saved_path, question: str, response: dict) -> None:
+    """Dam bao cau hoi DEM co khung vat the de UI ve len anh.
+
+    Vision agent chi tra khung khi no TU CHON goi YOLO; model co the chi nhin anh
+    roi dem bang mat (khong co khung, khong co phan tram). O day: neu cau hoi la
+    cau dem ma chua co ket qua YOLO thi chay YOLO truc tiep (nhanh, khong ton luot
+    model). Luon them image_size de UI doi toa do bbox (pixel) sang phan tram.
+    Khong bao gio raise: day chi la phan bo sung.
+    """
+    if saved_path is None:
+        return
+    try:
+        if "detections" not in response:
+            from app.agents.vision_agent.tools import (
+                can_dem_vat_the,
+                default_detector,
+                parse_yolo_results,
+            )
+
+            if not can_dem_vat_the(question):
+                return
+            payload = parse_yolo_results(default_detector(str(saved_path)))
+            if not payload["counting"]:
+                return
+            response["counting"] = payload["counting"]
+            response["detections"] = payload["detections"]
+        if response.get("detections"):
+            from PIL import Image
+
+            with Image.open(saved_path) as im:
+                response["image_size"] = [int(im.size[0]), int(im.size[1])]
+    except Exception:  # noqa: BLE001
+        return
+
+
 def _extract_agent_trace(result: dict):
     """Doc trace cua Supervisor de biet: (1) agent con nao da duoc goi, theo
     dung thu tu; (2) cau tra loi rieng cua tung agent con. Dung de UI hien thi
@@ -670,6 +705,52 @@ def get_conversation(
     return hoi_thoai
 
 
+def _thumb_nho_tu_bytes(raw: Optional[bytes], canh: int = 200) -> str:
+    """Anh nho (canh dai toi da `canh` px) dang base64 cho thu vien anh."""
+    if not raw:
+        return ""
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(raw)) as im:
+            im = im.convert("RGB")
+            im.thumbnail((canh, canh))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=70)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:  # noqa: BLE001 - thieu anh nho khong dang lam hong request
+        return ""
+
+
+@app.get("/api/conversations/{conversation_id}/images")
+def list_conversation_images(
+    conversation_id: str,
+    user_id: str = "",
+    authorization: Optional[str] = Header(None),
+):
+    """Thu vien anh cua hoi thoai: cac anh dang duoc bo nho anh nho, kem ho so AI
+    da lap (chu de, mau sac, boi canh...) va anh nho. Chi doc, khong goi model."""
+    uid = _danh_tinh(authorization, user_id)
+    _bat_buoc_co_hoi_thoai(conversation_id, uid)
+    ket_qua: List[dict] = []
+    for anh in store.danh_sach_anh(conversation_id, settings.image_memory_max):
+        ho_so = anh.get("profile") or {}
+        muc = {
+            "stt": anh["stt"],
+            "con_anh": bool(anh.get("con_anh")),
+            "notes": [g for g in ho_so.get("notes", []) if isinstance(g, str)],
+        }
+        for ten in image_memory.TRUONG_HO_SO:
+            muc[ten] = ho_so.get(ten, "")
+        muc["thumb_base64"] = (
+            _thumb_nho_tu_bytes(store.lay_du_lieu_anh(conversation_id, anh["stt"]))
+            if muc["con_anh"]
+            else ""
+        )
+        ket_qua.append(muc)
+    return {"images": ket_qua}
+
+
 @app.patch("/api/conversations/{conversation_id}")
 def update_conversation(
     conversation_id: str,
@@ -979,6 +1060,7 @@ def ask_supervisor(
             response["agent_answers"] = agent_answers
         _extract_vision_extras(tool_outputs, response)
         _research_extras(result, answer, response)
+        _bo_sung_khung_yolo(saved_path, question, response)
 
         warnings = [
             _canh_bao_de_doc(name, text)

@@ -154,6 +154,8 @@ def make_topic_tool(spec, *, profile: SearchProfile, model=None, ten_chu_de=None
         if not answer_raw:
             answer_raw = f"{TIEN_TO_KHONG_DU} topic agent returned no answer"
         answer_final, bao_cao = apply_grounding_policy(answer_raw, evidence_text)
+        if getattr(spec, "postprocess", None):
+            answer_final = spec.postprocess(answer_final)
         status = "no_data" if answer_final.strip().startswith(TIEN_TO_KHONG_DU) else "ok"
         nhan = list(dict.fromkeys(m.group(0) for m in NHAN_RE.finditer(answer_final)))
 

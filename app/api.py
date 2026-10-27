@@ -241,6 +241,41 @@ def _extract_vision_extras(tool_outputs: Dict[str, str], response: dict) -> None
         Path(annotated).unlink(missing_ok=True)
 
 
+def _bo_sung_khung_yolo(saved_path, question: str, response: dict) -> None:
+    """Dam bao cau hoi DEM co khung vat the de UI ve len anh.
+
+    Vision agent chi tra khung khi no TU CHON goi YOLO; model co the chi nhin anh
+    roi dem bang mat (khong co khung, khong co phan tram). O day: neu cau hoi la
+    cau dem ma chua co ket qua YOLO thi chay YOLO truc tiep (nhanh, khong ton luot
+    model). Luon them image_size de UI doi toa do bbox (pixel) sang phan tram.
+    Khong bao gio raise: day chi la phan bo sung.
+    """
+    if saved_path is None:
+        return
+    try:
+        if "detections" not in response:
+            from app.agents.vision_agent.tools import (
+                can_dem_vat_the,
+                default_detector,
+                parse_yolo_results,
+            )
+
+            if not can_dem_vat_the(question):
+                return
+            payload = parse_yolo_results(default_detector(str(saved_path)))
+            if not payload["counting"]:
+                return
+            response["counting"] = payload["counting"]
+            response["detections"] = payload["detections"]
+        if response.get("detections"):
+            from PIL import Image
+
+            with Image.open(saved_path) as im:
+                response["image_size"] = [int(im.size[0]), int(im.size[1])]
+    except Exception:  # noqa: BLE001
+        return
+
+
 def _extract_agent_trace(result: dict):
     """Doc trace cua Supervisor de biet: (1) agent con nao da duoc goi, theo
     dung thu tu; (2) cau tra loi rieng cua tung agent con. Dung de UI hien thi
@@ -802,6 +837,7 @@ def ask_supervisor(
         if agent_answers:
             response["agent_answers"] = agent_answers
         _extract_vision_extras(tool_outputs, response)
+        _bo_sung_khung_yolo(saved_path, question, response)
 
         warnings = [
             _canh_bao_de_doc(name, text)

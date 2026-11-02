@@ -644,6 +644,7 @@ body.gon .route,body.gon .agent-note{display:none;}
   background:var(--surface-2);color:var(--text);font:inherit;font-size:12.5px;padding:0 6px;cursor:pointer;
 }
 .mode-select:disabled{opacity:.45;cursor:not-allowed;}
+.mode-select[aria-pressed="true"]{color:var(--supervisor);border-color:var(--supervisor);}
 
 /* ---- chip goi y theo anh + thu vien anh cua hoi thoai ---- */
 .chips-anh{display:none;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
@@ -961,6 +962,7 @@ body.gon .route,body.gon .agent-note{display:none;}
           <option value="standard">Chuẩn</option>
           <option value="full">Đầy đủ</option>
         </select>
+        <button type="button" id="btn-sau" class="mode-select" aria-pressed="false" title="Tìm kiếm chuyên sâu: tách câu hỏi con, tra nhiều nguồn, xuất báo cáo .md (tốn nhiều lượt model hơn)">Chuyên sâu</button>
         <button type="submit" class="send" id="btn-send" disabled title="Gửi" aria-label="Gửi">
           <svg class="i-gui" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           <span class="i-dung" aria-hidden="true"></span>
@@ -1871,6 +1873,8 @@ async function gui(cauHoi, file) {
   capNhatNutGui();
 
   hienManChao(false);
+  /* Che do chuyen sau chi cho cau hoi chu (khong anh): /api/deep_research tra bao cao .md. */
+  const sau = !file && $("btn-sau").getAttribute("aria-pressed") === "true";
   const thread = $("thread");
   const turn = document.createElement("div");
   turn.className = "turn";
@@ -1878,7 +1882,7 @@ async function gui(cauHoi, file) {
   turn.innerHTML =
     '<div class="bubble-user">' + escapeHtml(cauHoi) +
     (anhTam ? '<img src="' + anhTam + '" alt="Ảnh đã gửi">' : "") + "</div>" +
-    (laCauHoiResearch(cauHoi, file) ? htmlChoResearch() : htmlCho(anhTam));
+    (sau || laCauHoiResearch(cauHoi, file) ? htmlChoResearch() : htmlCho(anhTam));
   thread.appendChild(turn);
   xuongCuoi();
 
@@ -1892,14 +1896,15 @@ async function gui(cauHoi, file) {
   else if (state.projectMoi) body.append("project_id", state.projectMoi);
   if (file) body.append("file", file);
   const cheDo = $("research-mode");
-  if (!cheDo.disabled) body.append("research_mode", cheDo.value);
+  if (!cheDo.disabled || sau) body.append("research_mode", cheDo.value);
 
   try {
-    const data = await api("/api/ask", { method: "POST", body: body, signal: state.boDung.signal });
+    const data = await api(sau ? "/api/deep_research" : "/api/ask", { method: "POST", body: body, signal: state.boDung.signal });
     const dots = turn.querySelector(".cho");
     const { answer, ...extras } = data;
     dots.outerHTML = htmlTraLoi(answer, extras, anhTam);
     kichHoatKhung(turn);
+    if (data.markdown) themNutTaiBaoCao(turn, data.markdown, data.filename);
     /* Server vua danh so cho anh nay -> hien "Anh N" duoi anh vua gui. */
     const anhVuaGui = turn.querySelector(".bubble-user img");
     if (data.image_no && anhVuaGui) anhVuaGui.insertAdjacentHTML("afterend", htmlSoAnh(data.image_no));
@@ -1938,6 +1943,19 @@ async function gui(cauHoi, file) {
     capNhatNutGui();
     xuongCuoi();
   }
+}
+
+/* Nut tai bao cao cua tim kiem chuyen sau (file .md server cung da luu o runs/research/). */
+function themNutTaiBaoCao(turn, md, ten) {
+  const nut = Object.assign(document.createElement("button"), { type: "button", textContent: "Tải báo cáo .md" });
+  nut.onclick = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown;charset=utf-8" }));
+    a.download = ten || "research.md";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  turn.querySelector(".ans-tools").appendChild(nut);
 }
 
 /* ===================================================================== *
@@ -2601,6 +2619,8 @@ async function ganNutCheDo() {
     sel.title = "Chỉ dùng được khi server chạy RESEARCH_ARCH=topics";
   }
   sel.onchange = () => { try { localStorage.setItem("vaai_che_do", sel.value); } catch (e) {} };
+  const sau = $("btn-sau");
+  sau.onclick = () => sau.setAttribute("aria-pressed", String(sau.getAttribute("aria-pressed") !== "true"));
 }
 </script>
 </body>

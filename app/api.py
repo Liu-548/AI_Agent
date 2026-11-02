@@ -946,6 +946,36 @@ def ask_research(
         raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
 
 
+@app.post("/api/deep_research")
+def deep_research(
+    question: str = Form(..., description="Cau hoi can tim hieu sau, vd 'rotary positional encoding'"),
+    research_mode: str = Form("", description="eco | standard | full - de trong = theo RESEARCH_MODE cua server"),
+):
+    """Tim kiem chuyen sau: quy trinh co dinh plan -> search -> notes -> write (xem
+    app/agents/research_agent/deep_research.py), ghi bao cao .md vao runs/research/ va
+    tra noi dung ve cho UI. Ton 1 + (1-2 x so cau hoi con) + 1 luot LLM. Khong luu lich su."""
+    che_do = research_mode.strip().lower()
+    if che_do and che_do not in RESEARCH_MODES:
+        raise HTTPException(status_code=400, detail=f"research_mode phai la mot trong {list(RESEARCH_MODES)}")
+    if not question.strip():
+        raise HTTPException(status_code=400, detail="Cau hoi khong duoc de trong.")
+    from app.agents.research_agent.deep_research import run_deep_research
+
+    try:
+        kq = run_deep_research(question.strip(), che_do or None)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
+    return {
+        "answer": kq["report"],
+        "agents_used": ["research_agent"],
+        "markdown": kq["markdown"],
+        "filename": kq["filename"],
+        "sub_questions": kq["sub_questions"],
+        "research_mode": kq["mode"],
+        "grounding": kq["grounding"],
+    }
+
+
 @app.post("/api/ask")
 def ask_supervisor(
     question: str = Form(..., description="Cau hoi bat ky - supervisor tu chon agent con phu hop"),

@@ -37,11 +37,13 @@ CHU_DE = {
         ChuDe(
             "animal",
             "động vật",
-            "TOPIC FOCUS - animals: name the species (and the breed only if you can tell "
-            "it with reasonable confidence), say how many animals are visible, their "
-            "colors and markings, what they are doing, and the setting. If the species "
-            "is uncertain, give your best guess and say clearly that it is uncertain "
-            "instead of stating it as fact.",
+            "TOPIC FOCUS - animals: START with the number of animals of each kind as a plain "
+            "count of individuals (for example '2 dogs and 1 horse'); never write 'one species' "
+            "or 'one kind' in place of a count. Then name the species (and the breed only if "
+            "you can tell it with reasonable confidence), their colors and markings, what they "
+            "are doing, and the setting. If the animals do not look alike, do not claim they "
+            "are all the same breed. If the species or breed is uncertain, give your best "
+            "guess and say clearly that it is uncertain instead of stating it as fact.",
             ("loai gi", "con gi", "giong gi", "giong cho", "giong meo", "con vat", "dong vat"),
         ),
         ChuDe(

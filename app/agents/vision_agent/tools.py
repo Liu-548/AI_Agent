@@ -102,6 +102,9 @@ def describe_image(image_path_or_url: str, vision_llm) -> str:
 # model nhìn ảnh không đếm đáng tin. Viết KHÔNG DẤU: so khớp sau khi bỏ dấu.
 # Cố ý khớp rộng: nhầm sang đường cũ chỉ chậm hơn, còn nhầm sang đường nhanh mới sai
 # (vd "đêm" bỏ dấu thành "dem" cũng bị coi là đếm; chấp nhận được).
+# Khung dưới mức này là YOLO "không chắc" (UI ghi "+N không chắc", khớp NGUONG_CHAC trong web/UI_style.html).
+NGUONG_CHAC = 0.5
+
 _CAN_YOLO_RE = re.compile(
     r"\b(?:bao nhieu|dem|so luong|may (?:con|nguoi|chiec|cai|qua|cay|xe|vat|doi tuong)"
     r"|how many|count|counting|detect|phat hien|bounding box)\b"
@@ -319,6 +322,20 @@ def make_detect_and_count_tool(
                 ensure_ascii=False,
             )
         payload["labels_vi"] = nhan_viet(payload["counting"])
+        # Khung dưới 50% là YOLO "không chắc". Báo riêng để câu trả lời không nói "6" chắc nịch
+        # trong khi UI chỉ tính 5 và ghi "+1 không chắc" (xem NGUONG_CHAC trong web/UI_style.html).
+        chac = [d for d in payload["detections"] if d["confidence"] >= NGUONG_CHAC]
+        if chac and len(chac) < len(payload["detections"]):
+            ko_chac: dict = {}
+            for d in payload["detections"]:
+                if d["confidence"] < NGUONG_CHAC:
+                    ko_chac[d["class"]] = ko_chac.get(d["class"], 0) + 1
+            payload["uncertain_counting"] = ko_chac
+            payload["note"] = (
+                f"Detections below {int(NGUONG_CHAC * 100)}% confidence are listed in `uncertain_counting` "
+                "and are still included in `counting`. Report the confident count and mention the "
+                "uncertain ones separately (for example '5, and possibly 1 more'), never as sure."
+            )
         # Vẽ khung lên ảnh gốc chỉ khi bật DRAW_DETECTIONS=1 trong .env -- mặc định
         # TẮT để không sinh file "_detected.jpg" rác mỗi lần đếm vật thể.
         if settings.draw_detections_enabled:

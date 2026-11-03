@@ -172,3 +172,21 @@ def test_context_tu_dong_tra_ve_sau_khoi_with():
     with dung_cau_hoi("có mấy con mèo"):
         assert lop_dang_loc() == frozenset({"cat"})
     assert lop_dang_loc() == frozenset()
+
+
+# --------------------------- khung "không chắc" ------------------------------ #
+def test_tool_bao_rieng_khung_duoi_50_phan_tram(anh):
+    det = fake_detector_factory(
+        [("donut", 0.97, (1, 2, 30, 30)), ("donut", 0.93, (5, 6, 20, 20)), ("donut", 0.38, (1, 1, 9, 9))]
+    )
+    tool = make_detect_and_count_tool(detector=det)
+    out = json.loads(tool.invoke({"text": anh}))
+    assert out["counting"] == {"donut": 3}  # vẫn đủ, không âm thầm bỏ
+    assert out["uncertain_counting"] == {"donut": 1}
+    assert "uncertain" in out["note"]
+
+
+def test_tool_khong_co_khung_yeu_thi_khong_them_ghi_chu(anh):
+    det = fake_detector_factory([("dog", 0.9, (1, 2, 3, 4)), ("dog", 0.8, (5, 6, 7, 8))])
+    out = json.loads(make_detect_and_count_tool(detector=det).invoke({"text": anh}))
+    assert "uncertain_counting" not in out and "note" not in out

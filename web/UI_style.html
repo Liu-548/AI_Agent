@@ -562,6 +562,17 @@ body.gon .route,body.gon .agent-note{display:none;}
 .khung-box.chon{border-color:#fff;background:color-mix(in srgb,var(--vision) 22%,transparent);}
 .khung-box.chon span{background:#fff;color:#0a0c11;}
 .khung-box.mo{opacity:.18;}
+/* Khung dưới 50%: YOLO không chắc. Nét đứt + mờ + nằm dưới khung chắc chắn. */
+.khung-box{z-index:1;}
+.khung-box.ko-chac{z-index:0;border-style:dashed;opacity:.6;}
+.khung-box.ko-chac span{background:rgba(10,12,17,.82);color:#fff;}
+.khung-box.chon{z-index:3;}
+/* Nhãn sát mép phải: neo vào góc phải của khung để không bị cắt chữ. */
+.khung-box.nhan-phai span{left:auto;right:-2px;border-radius:0 0 0 5px;}
+.khung-dong.ko-chac{border-style:dashed;}
+.khung-dong .tag{font-size:10.5px;color:var(--muted);margin-left:6px;}
+.khung-dong .ten{flex:1;text-align:left;}
+.chip.ko-chac{border-style:dashed;color:var(--muted);}
 .khung.an-khung .khung-lop{display:none;}
 .khung-ben{flex:1 1 38%;min-width:150px;display:flex;flex-direction:column;gap:10px;}
 .khung-so{display:flex;align-items:baseline;gap:8px;}
@@ -1592,39 +1603,72 @@ function tenVatThe(c, map) {
 
 /* Anh da gui + khung YOLO ve len bang CSS (toa do pixel -> %), bam vao khung hoac
    dong ben canh de lam noi bat. Can e.detections va e.image_size tu server. */
+const NGUONG_CHAC = 0.5;   // dưới mức này YOLO "không chắc" (khớp NGUONG_CHAC trong tools.py)
 function htmlKhungVatThe(e, anhNguon) {
   const ds = e.detections || [];
   const kt = e.image_size;
   if (!anhNguon || !ds.length || !kt || !(kt[0] > 0) || !(kt[1] > 0)) return "";
-  const tong = {};
-  ds.forEach((d) => { tong[d["class"]] = (tong[d["class"]] || 0) + 1; });
+  const conf = (d) => Number(d.confidence) || 0;
+  // Có ít nhất một khung chắc chắn thì mới tách "không chắc"; toàn khung yếu thì coi như bình thường.
+  const coChac = ds.some((d) => conf(d) >= NGUONG_CHAC);
+  const kiemChac = (d) => coChac && conf(d) < NGUONG_CHAC;
+  const tong = {}, chacTheoLop = {};
+  ds.forEach((d) => {
+    tong[d["class"]] = (tong[d["class"]] || 0) + 1;
+    if (!kiemChac(d)) chacTheoLop[d["class"]] = (chacTheoLop[d["class"]] || 0) + 1;
+  });
+  const soChac = ds.filter((d) => !kiemChac(d)).length;
+  const soKo = ds.length - soChac;
   const dem = {};
   let khung = "", dong = "";
   ds.forEach((d, i) => {
     const c = d["class"];
     dem[c] = (dem[c] || 0) + 1;
+    const ko = kiemChac(d);
     const ten = tenVatThe(c, e.ten_viet) + (tong[c] > 1 ? " " + dem[c] : "");
-    const pct = Math.round((Number(d.confidence) || 0) * 100) + "%";
+    const pct = Math.round(conf(d) * 100) + "%";
     const b = d.bbox || [0, 0, 0, 0];
     const x = Math.max(0, b[0] / kt[0] * 100), y = Math.max(0, b[1] / kt[1] * 100);
     const w = Math.min(100 - x, (b[2] - b[0]) / kt[0] * 100), h = Math.min(100 - y, (b[3] - b[1]) / kt[1] * 100);
-    khung += '<button type="button" class="khung-box" data-khung-pick="' + i + '" aria-label="' + escapeHtml(ten + ", " + pct) +
+    khung += '<button type="button" class="khung-box' + (ko ? " ko-chac" : "") + '" data-khung-pick="' + i + '" aria-label="' +
+      escapeHtml(ten + ", " + pct + (ko ? ", không chắc" : "")) +
       '" style="left:' + x.toFixed(2) + "%;top:" + y.toFixed(2) + "%;width:" + w.toFixed(2) + "%;height:" + h.toFixed(2) +
-      "%;animation-delay:" + (i * 180) + 'ms"><span>' + escapeHtml(ten) + "</span></button>";
-    dong += '<button type="button" class="khung-dong" data-khung-pick="' + i + '"><span>' + escapeHtml(ten) +
+      "%;animation-delay:" + (i * 180) + 'ms"><span>' + escapeHtml(ten) + (ko ? "?" : "") + "</span></button>";
+    dong += '<button type="button" class="khung-dong' + (ko ? " ko-chac" : "") + '" data-khung-pick="' + i + '"><span class="ten">' +
+      escapeHtml(ten) + (ko ? '<span class="tag">không chắc</span>' : "") +
       '</span><span class="pct">' + pct + "</span></button>";
   });
-  const chips = Object.entries(tong)
-    .map(([c, so]) => '<span class="chip"><b>' + so + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + "</span>").join("");
+  let chips = Object.entries(tong)
+    .filter(([c]) => chacTheoLop[c])
+    .map(([c]) => '<span class="chip"><b>' + chacTheoLop[c] + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + "</span>").join("");
+  if (soKo) chips += '<span class="chip ko-chac"><b>+' + soKo + "</b> không chắc</span>";
   return '<div class="panel khung" data-khung><h2>Vật thể phát hiện</h2><div class="khung-hang">' +
     '<div class="khung-anh"><img src="' + anhNguon + '" alt="Ảnh đã gửi"><div class="khung-lop">' + khung + "</div></div>" +
-    '<div class="khung-ben"><div class="khung-so"><b data-khung-so>' + ds.length + "</b><span>vật thể · chạm để làm nổi bật</span></div>" +
+    '<div class="khung-ben"><div class="khung-so"><b data-khung-so>' + soChac + "</b><span>vật thể" +
+    (soKo ? " · +" + soKo + " không chắc" : "") + " · chạm để làm nổi bật</span></div>" +
     '<div class="chips">' + chips + '</div><div class="khung-ds">' + dong + "</div>" +
     '<button type="button" class="khung-an" data-khung-toggle>Ẩn khung</button></div></div></div>';
 }
 
+/* Nhãn nào tràn ra ngoài mép phải ảnh thì neo sang góc phải của khung (chạy sau khi đã có layout). */
+function canhNhanKhung(goc) {
+  goc.querySelectorAll(".khung-anh").forEach((vung) => {
+    const im = vung.querySelector("img");
+    if (im && !im.complete) im.addEventListener("load", () => canhNhanKhung(goc), { once: true });
+    const gioiHan = vung.getBoundingClientRect().right;
+    vung.querySelectorAll(".khung-box").forEach((box) => {
+      box.classList.remove("nhan-phai");
+      const nhan = box.firstElementChild;
+      if (nhan && nhan.getBoundingClientRect().right > gioiHan) box.classList.add("nhan-phai");
+    });
+  });
+}
+
+window.addEventListener("resize", () => document.querySelectorAll("[data-khung]").forEach(canhNhanKhung));
+
 /* Ket qua vua ve xong: so dem nhay tu 0 len N cung nhip voi cac khung hien ra. */
 function kichHoatKhung(goc) {
+  canhNhanKhung(goc);
   if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   goc.querySelectorAll("[data-khung-so]").forEach((el) => {
     const n = Number(el.textContent) || 0;
@@ -1693,6 +1737,7 @@ function renderTinNhan(messages) {
       if (!turn) { turn = document.createElement("div"); turn.className = "turn"; thread.appendChild(turn); }
       const thumb = turn.dataset.thumb ? "data:image/jpeg;base64," + turn.dataset.thumb : null;
       turn.insertAdjacentHTML("beforeend", htmlTraLoi(m.content, m.extras, thumb));
+      canhNhanKhung(turn);
       turn = null;
     }
   });

@@ -190,3 +190,22 @@ def test_tool_khong_co_khung_yeu_thi_khong_them_ghi_chu(anh):
     det = fake_detector_factory([("dog", 0.9, (1, 2, 3, 4)), ("dog", 0.8, (5, 6, 7, 8))])
     out = json.loads(make_detect_and_count_tool(detector=det).invoke({"text": anh}))
     assert "uncertain_counting" not in out and "note" not in out
+
+
+def test_loc_van_chay_khi_tool_nam_trong_agent_langgraph_that(anh):
+    """ContextVar phải đi xuyên qua vòng ReAct của LangGraph (kể cả gọi tool song song),
+    không thì lọc chỉ chạy trong test đơn lẻ mà hỏng khi ráp vào agent thật."""
+    from langchain_core.messages import AIMessage, ToolMessage
+    from langgraph.prebuilt import create_react_agent
+
+    from tests.fakes import FakeToolCallingModel, tool_call
+
+    tool = make_detect_and_count_tool(detector=_det())
+    for so_lan in (1, 2):
+        goi = [tool_call("detect_and_count_objects", {"text": anh}, f"c{i}") for i in range(so_lan)]
+        model = FakeToolCallingModel(responses=[AIMessage(content="", tool_calls=goi), AIMessage(content="xong")])
+        agent = create_react_agent(model, [tool])
+        with dung_cau_hoi("Có mấy con mèo?"):
+            ra = agent.invoke({"messages": [("user", "x")]})
+        dem = [json.loads(m.content)["counting"] for m in ra["messages"] if isinstance(m, ToolMessage)]
+        assert dem == [{"cat": 1}] * so_lan

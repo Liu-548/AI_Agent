@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.contracts import tool_error
 from app.agents.vision_agent.prompts import DIRECT_ANSWER_SYSTEM_PROMPT, IMAGE_DESCRIBER_SYSTEM_PROMPT
 from app.agents.vision_agent.image_utils import draw_detections, encode_image, extract_image_ref
+from app.agents.vision_agent.labels import loc_theo_lop, lop_dang_loc, nhan_viet, ten_viet
 from app.agents.vision_agent.topics import khong_dau, loi_dan_hien_tai
 
 
@@ -294,11 +295,30 @@ def make_detect_and_count_tool(
         except Exception as exc:
             return tool_error("YOLO_INFERENCE_FAILED", str(exc))
         payload = parse_yolo_results(results)
+        # Hỏi "có mấy con mèo" thì chỉ trả mèo (xem labels.py). Câu không nêu loại cụ
+        # thể thì không lọc gì, như cũ.
+        loai_can = lop_dang_loc()
+        if loai_can:
+            payload = loc_theo_lop(payload, loai_can)
         if not payload["counting"]:
+            if loai_can:
+                ten = ", ".join(ten_viet(c) for c in sorted(loai_can))
+                return json.dumps(
+                    {
+                        "counting": {},
+                        "detections": [],
+                        "filtered_by": sorted(loai_can),
+                        "note": f"No {ten} detected in the image: the answer is 0. "
+                        "Other objects were deliberately left out because the user "
+                        "asked only about this kind.",
+                    },
+                    ensure_ascii=False,
+                )
             return json.dumps(
                 {"counting": {}, "detections": [], "note": "No object detected."},
                 ensure_ascii=False,
             )
+        payload["labels_vi"] = nhan_viet(payload["counting"])
         # Vẽ khung lên ảnh gốc chỉ khi bật DRAW_DETECTIONS=1 trong .env -- mặc định
         # TẮT để không sinh file "_detected.jpg" rác mỗi lần đếm vật thể.
         if settings.draw_detections_enabled:
@@ -317,7 +337,8 @@ def make_detect_and_count_tool(
             "x1,y1,x2,y2 format), and `annotated_image` (path to a copy of the image "
             "with boxes drawn on it, when available). Use this for any 'how many' "
             "question about an image, and mention the annotated_image path to the user "
-            "if present so they can open it and see the boxes."
+            "if present so they can open it and see the boxes. When `labels_vi` is present, "
+            "call each class by its Vietnamese name from it."
         ),
         args_schema=ImageToolInput,
     )

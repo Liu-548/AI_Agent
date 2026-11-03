@@ -51,6 +51,48 @@ def _sniff_mime(data: bytes, fallback_name: str = "") -> Optional[str]:
     return f"image/{'jpeg' if fmt == 'jpeg' else fmt}"
 
 
+def mo_anh_dung_huong(nguon):
+    """Mở ảnh (đường dẫn hoặc file-object) và XOAY theo cờ EXIF Orientation, ra RGB.
+
+    Ảnh chụp từ điện thoại thường lưu pixel NẰM NGANG kèm cờ EXIF "xoay 90 độ khi
+    hiển thị". Trình xem ảnh làm theo cờ, còn `Image.open(...).convert("RGB")` thì
+    không: model nhận ảnh nằm ngang, khung phát hiện lệch hẳn khỏi vật thể, đếm sai.
+    Mọi chỗ cần pixel để đưa vào YOLO / vẽ khung / thu nhỏ phải đi qua hàm này.
+    """
+    from PIL import Image, ImageOps
+
+    im = Image.open(nguon)
+    im.load()
+    return ImageOps.exif_transpose(im).convert("RGB")
+
+
+def chuan_hoa_huong_anh(path) -> bool:
+    """Xoay file ảnh theo cờ EXIF rồi GHI ĐÈ lại với cờ đã xóa. Trả True nếu có sửa.
+
+    Gọi một lần ngay khi nhận ảnh upload: sau đó mọi nơi (YOLO, Gemini, ảnh thu nhỏ,
+    kích thước ảnh gửi cho UI vẽ khung) cùng thấy MỘT ảnh đúng chiều, khỏi phải nhớ
+    xoay ở từng chỗ. Ảnh không có cờ hoặc cờ = 1 thì không đụng tới file (khỏi nén
+    lại JPEG vô ích). Không bao giờ raise: ảnh lạ/hỏng giữ nguyên như cũ.
+    """
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(path) as im:
+            huong = im.getexif().get(0x0112, 1)
+            if huong in (None, 0, 1):
+                return False
+            dinh_dang = im.format or "JPEG"
+            xoay = ImageOps.exif_transpose(im)
+            xoay.load()
+        tham_so = {"quality": 95} if dinh_dang.upper() in ("JPEG", "WEBP") else {}
+        if dinh_dang.upper() == "JPEG":
+            xoay = xoay.convert("RGB")
+        xoay.save(path, dinh_dang, **tham_so)
+        return True
+    except Exception:  # noqa: BLE001 - ảnh lạ thì để nguyên, đừng làm hỏng upload
+        return False
+
+
 def encode_image(
     image_path_or_url: str, get_mime_type: bool = False
 ) -> Union[None, str, Tuple[Optional[str], Optional[str]]]:
@@ -109,13 +151,13 @@ def draw_detections(image_ref: str, detections: list, output_path: Optional[str]
         if image_ref.lower().startswith("http"):
             resp = requests.get(image_ref, timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
-            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+            img = mo_anh_dung_huong(io.BytesIO(resp.content))
             if output_path is None:
                 return None  # không có tên file gốc để tự đặt tên ra -> bắt buộc phải truyền
         else:
             if not os.path.exists(image_ref):
                 return None
-            img = Image.open(image_ref).convert("RGB")
+            img = mo_anh_dung_huong(image_ref)
             if output_path is None:
                 root, _ext = os.path.splitext(image_ref)
                 output_path = f"{root}_detected.jpg"

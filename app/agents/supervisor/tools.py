@@ -12,6 +12,7 @@ from app.agents.research_agent.agent import build_research_agent
 from app.agents.vision_agent.agent import build_vision_agent
 from app.agents.vision_agent.image_utils import extract_image_ref
 from app.agents.vision_agent.tools import can_dem_vat_the, tra_loi_truc_tiep
+from app.agents.vision_agent.labels import dung_cau_hoi
 from app.agents.vision_agent.topics import chon_chu_de, dung_chu_de
 from app.core.contracts import tool_error
 
@@ -229,7 +230,8 @@ def vision_tool(
 
     # Chủ đề ảnh: lời dặn riêng cho lượt nhìn ảnh (xem topics.py). Không có chủ đề
     # trong hồ sơ (khách vãng lai, ảnh cũ) thì chỉ dựa vào câu hỏi, rồi đến "chung".
-    with dung_chu_de(chon_chu_de_cho_anh(query, so_anh, config)):
+    # dung_cau_hoi: để detect_and_count_objects chỉ trả loại vật thể mà câu hỏi nhắm tới.
+    with dung_chu_de(chon_chu_de_cho_anh(query, so_anh, config)), dung_cau_hoi(query):
         # Đường nhanh: một lượt model nhìn ảnh và trả lời luôn (xem VISION_DIRECT).
         nhanh = thu_tra_loi_truc_tiep(query, image_path)
         if nhanh is not None:

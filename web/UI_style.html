@@ -1577,13 +1577,17 @@ function htmlTrace(trace) {
 const TEN_VAT_THE = {
   dog: "Chó", cat: "Mèo", person: "Người", bird: "Chim", horse: "Ngựa", cow: "Bò", sheep: "Cừu",
   elephant: "Voi", bear: "Gấu", zebra: "Ngựa vằn", giraffe: "Hươu cao cổ",
-  car: "Xe hơi", bicycle: "Xe đạp", motorcycle: "Xe máy", bus: "Xe buýt", truck: "Xe tải",
+  car: "Ô tô", bicycle: "Xe đạp", motorcycle: "Xe máy", bus: "Xe buýt", truck: "Xe tải",
   bottle: "Chai", cup: "Cốc", chair: "Ghế", couch: "Ghế sofa", bed: "Giường",
   laptop: "Laptop", "cell phone": "Điện thoại", book: "Sách", tv: "TV",
   apple: "Táo", banana: "Chuối", orange: "Cam", pizza: "Pizza", cake: "Bánh",
 };
-function tenVatThe(c) {
-  return TEN_VAT_THE[c] || (c ? c.charAt(0).toUpperCase() + c.slice(1) : "Vật thể");
+/* Ten tieng Viet uu tien cua server (e.ten_viet, du 80 lop COCO, xem labels.py); tin cu
+   khong co thi roi ve bang rut gon o tren, cuoi cung la ten goc viet hoa. */
+function tenVatThe(c, map) {
+  const vi = map && map[c];
+  const ten = vi || TEN_VAT_THE[c] || c;
+  return ten ? ten.charAt(0).toUpperCase() + ten.slice(1) : "Vật thể";
 }
 
 /* Anh da gui + khung YOLO ve len bang CSS (toa do pixel -> %), bam vao khung hoac
@@ -1599,7 +1603,7 @@ function htmlKhungVatThe(e, anhNguon) {
   ds.forEach((d, i) => {
     const c = d["class"];
     dem[c] = (dem[c] || 0) + 1;
-    const ten = tenVatThe(c) + (tong[c] > 1 ? " " + dem[c] : "");
+    const ten = tenVatThe(c, e.ten_viet) + (tong[c] > 1 ? " " + dem[c] : "");
     const pct = Math.round((Number(d.confidence) || 0) * 100) + "%";
     const b = d.bbox || [0, 0, 0, 0];
     const x = Math.max(0, b[0] / kt[0] * 100), y = Math.max(0, b[1] / kt[1] * 100);
@@ -1611,7 +1615,7 @@ function htmlKhungVatThe(e, anhNguon) {
       '</span><span class="pct">' + pct + "</span></button>";
   });
   const chips = Object.entries(tong)
-    .map(([c, so]) => '<span class="chip"><b>' + so + "</b> " + escapeHtml(tenVatThe(c).toLowerCase()) + "</span>").join("");
+    .map(([c, so]) => '<span class="chip"><b>' + so + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + "</span>").join("");
   return '<div class="panel khung" data-khung><h2>Vật thể phát hiện</h2><div class="khung-hang">' +
     '<div class="khung-anh"><img src="' + anhNguon + '" alt="Ảnh đã gửi"><div class="khung-lop">' + khung + "</div></div>" +
     '<div class="khung-ben"><div class="khung-so"><b data-khung-so>' + ds.length + "</b><span>vật thể · chạm để làm nổi bật</span></div>" +
@@ -1661,7 +1665,7 @@ function htmlTraLoi(answer, extras, anhNguon) {
   if (khungVatThe) html += khungVatThe;
   if (!khungVatThe && e.counting && Object.keys(e.counting).length) {
     const chips = Object.entries(e.counting)
-      .map(([ten, so]) => '<span class="chip"><b>' + so + "</b> " + escapeHtml(ten) + "</span>").join("");
+      .map(([c, so]) => '<span class="chip"><b>' + so + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + "</span>").join("");
     html += '<div class="panel"><h2>Số lượng đếm được</h2><div class="chips">' + chips + "</div></div>";
   }
   if (!khungVatThe && e.annotated_image_base64) {

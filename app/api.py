@@ -38,6 +38,8 @@ from fastapi.responses import FileResponse
 
 from app import auth, image_memory, store
 from app.core.config import RESEARCH_MODES, settings
+from app.agents.vision_agent.image_utils import chuan_hoa_huong_anh, mo_anh_dung_huong
+from app.agents.vision_agent.labels import dung_cau_hoi, loc_theo_lop, lop_tu_cau_hoi, nhan_viet
 from app.core.pretty import message_text
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -162,6 +164,10 @@ def _save_upload(file: UploadFile) -> Path:
                     detail=f"Anh vuot qua {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
                 )
             out.write(chunk)
+    # Anh doc chup tu dien thoai luu pixel nam ngang + co EXIF "xoay khi hien thi".
+    # Xoay that su mot lan o day de YOLO, Gemini, anh thu nho va khung ve len anh
+    # cung thay MOT anh dung chieu (xem image_utils.chuan_hoa_huong_anh).
+    chuan_hoa_huong_anh(dest)
     return dest
 
 
@@ -172,13 +178,10 @@ def _thumbnail_base64(path: Path) -> str:
     vai chuc cau hoi la day database mien phi. Ban thu nho ~20-40KB.
     """
     try:
-        from PIL import Image
-
-        with Image.open(path) as im:
-            im = im.convert("RGB")
-            im.thumbnail((THUMBNAIL_MAX_PX, THUMBNAIL_MAX_PX))
-            buf = io.BytesIO()
-            im.save(buf, "JPEG", quality=72)
+        im = mo_anh_dung_huong(path)
+        im.thumbnail((THUMBNAIL_MAX_PX, THUMBNAIL_MAX_PX))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=72)
         return base64.b64encode(buf.getvalue()).decode("ascii")
     except Exception:  # noqa: BLE001 - thieu anh xem truoc khong dang lam hong request
         return ""
@@ -292,6 +295,8 @@ def _bo_sung_khung_yolo(saved_path, question: str, response: dict) -> None:
     roi dem bang mat (khong co khung, khong co phan tram). O day: neu cau hoi la
     cau dem ma chua co ket qua YOLO thi chay YOLO truc tiep (nhanh, khong ton luot
     model). Luon them image_size de UI doi toa do bbox (pixel) sang phan tram.
+    Cau hoi nhac toi mot loai ("co may con meo") thi chi giu loai do (labels.py),
+    va gui kem ten tieng Viet (`ten_viet`) de UI goi dung mot ten.
     Khong bao gio raise: day chi la phan bo sung.
     """
     if saved_path is None:
@@ -311,11 +316,24 @@ def _bo_sung_khung_yolo(saved_path, question: str, response: dict) -> None:
                 return
             response["counting"] = payload["counting"]
             response["detections"] = payload["detections"]
-        if response.get("detections"):
-            from PIL import Image
 
-            with Image.open(saved_path) as im:
-                response["image_size"] = [int(im.size[0]), int(im.size[1])]
+        # Loc theo loai ma cau hoi nhac toi (idempotent: ket qua da loc thi loc lai khong doi).
+        loai_can = lop_tu_cau_hoi(question)
+        if loai_can and response.get("detections") is not None:
+            da_loc = loc_theo_lop(
+                {"counting": response.get("counting", {}), "detections": response["detections"]},
+                loai_can,
+            )
+            if da_loc["detections"]:
+                response["counting"] = da_loc["counting"]
+                response["detections"] = da_loc["detections"]
+            else:  # khong co loai nao duoc hoi -> khong ve khung cua loai khac
+                response.pop("counting", None)
+                response.pop("detections", None)
+
+        if response.get("detections"):
+            response["image_size"] = list(mo_anh_dung_huong(saved_path).size)
+            response["ten_viet"] = nhan_viet(response.get("counting") or {})
     except Exception:  # noqa: BLE001
         return
 
@@ -710,13 +728,10 @@ def _thumb_nho_tu_bytes(raw: Optional[bytes], canh: int = 200) -> str:
     if not raw:
         return ""
     try:
-        from PIL import Image
-
-        with Image.open(io.BytesIO(raw)) as im:
-            im = im.convert("RGB")
-            im.thumbnail((canh, canh))
-            buf = io.BytesIO()
-            im.save(buf, "JPEG", quality=70)
+        im = mo_anh_dung_huong(io.BytesIO(raw))
+        im.thumbnail((canh, canh))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=70)
         return base64.b64encode(buf.getvalue()).decode("ascii")
     except Exception:  # noqa: BLE001 - thieu anh nho khong dang lam hong request
         return ""
@@ -889,9 +904,10 @@ def ask_vision(
         message = f"{question}\nImage: {saved_path}"
         run_config = {"recursion_limit": settings.recursion_limit}
 
-        result = graph.invoke(
-            {"messages": [{"role": "user", "content": message}]}, config=run_config
-        )
+        with dung_cau_hoi(question):
+            result = graph.invoke(
+                {"messages": [{"role": "user", "content": message}]}, config=run_config
+            )
         answer = _final_answer(result)
         tool_outputs = _collect_tool_outputs(result)
 

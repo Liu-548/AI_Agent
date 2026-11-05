@@ -1117,7 +1117,12 @@ def ask_supervisor(
         tool_sink: Dict[str, str] = {}
         run_config: dict = {
             "recursion_limit": settings.recursion_limit,
-            "configurable": {"tool_sink": tool_sink, "research_mode": che_do or None},
+            "configurable": {
+                "tool_sink": tool_sink,
+                "research_mode": che_do or None,
+                # Cau hoi GOC: vision_tool chi so sanh nhieu anh khi chinh nguoi dung hoi so sanh.
+                "user_question": question,
+            },
         }
         bo_giai: Optional[image_memory.BoGiaiAnh] = None
         ho_so_moi: List[Optional[dict]] = []
@@ -1138,7 +1143,8 @@ def ask_supervisor(
                 else:
                     message = (
                         f"{question}\nImages: {bi_danh} "
-                        f"({len(ds_so_moi)} images attached together to THIS message)"
+                        f"({len(ds_so_moi)} images attached to THIS message; compare them "
+                        f"only if the question asks to)"
                     )
                 if settings.vision_topics and luu_lich_su:
                     # Chu de anh phai biet TRUOC khi vision agent nhin anh de luot

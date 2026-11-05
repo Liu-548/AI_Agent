@@ -101,3 +101,21 @@ def test_mot_anh_nhu_cu(he):  # noqa: F811
     tra_loi = he.gui_anh("meo_cam", 1)
     assert tra_loi["image_no"] == 1 and "image_nos" not in tra_loi
     assert "Image: IMG1" in he.model.tin_nguoi_dung_cuoi
+
+
+def test_hai_anh_khac_nhau_hoi_thuong_thi_khong_so_sanh(he, monkeypatch):  # noqa: F811
+    """Gửi 2 ảnh không liên quan, hỏi "đây là gì": trả lời từng ảnh, không so sánh."""
+    monkeypatch.setenv("VISION_DIRECT", "true")
+    import importlib
+
+    import app.core.config as cfg
+
+    importlib.reload(cfg)
+    llm = _LlmSoSanh()
+    monkeypatch.setattr("app.core.llm.get_llm", lambda role, *a, **k: llm if role == "describe" else None)
+    # kể cả khi supervisor lỡ truyền cả hai mã trong một lần gọi
+    _kich_ban_so_sanh(he, "IMG1,IMG2")
+    r = _gui_nhieu(he, "Đây là gì?", ["meo_cam", "cho_trang"], he.headers)
+    assert r.status_code == 200, r.text
+    assert "compared_images" not in r.json()
+    assert len(llm.lan_goi) == 2 and all(_so_anh_trong(m) == 1 for m in llm.lan_goi)

@@ -2093,7 +2093,10 @@ const CHIP_ANH = [
 ];
 const TEN_CHU_DE = { animal: "động vật", travel: "du lịch", food: "ẩm thực", document: "tài liệu", chart: "biểu đồ", general: "chung" };
 
+/* Nhieu anh KHONG mac dinh la so sanh: chip dau la hoi tung anh; AI chi so sanh khi
+   cau hoi co y so sanh (xem la_cau_so_sanh trong supervisor/tools.py). */
 const CHIP_NHIEU_ANH = [
+  { nhan: "Mô tả từng ảnh", q: "Mô tả ngắn gọn từng ảnh.", icon: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
   { nhan: "So sánh các ảnh", q: "So sánh các ảnh này: giống và khác nhau ở điểm nào?", icon: "M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M12 3v18" },
   { nhan: "Ảnh nào nhiều vật hơn?", q: "Đếm vật thể trong từng ảnh và cho biết ảnh nào nhiều hơn.", icon: "M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M9 9h6v6H9z" },
   { nhan: "Có phải cùng loài/vật?", q: "Các ảnh này có phải cùng một loài (hoặc cùng một vật) không? Nêu điểm phân biệt.", icon: "M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z" },
@@ -2260,7 +2263,7 @@ function veFileDinhKem() {
     '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'
   ).join("") + (n < SO_ANH_MOI_TIN
     ? '<button type="button" class="fc-them" data-them-anh="1" title="Thêm ảnh để so sánh" aria-label="Thêm ảnh">+</button>' : "");
-  $("filechip-name").textContent = n === 1 ? dsFileDinhKem[0].name : n + " ảnh · gửi cùng lúc để so sánh";
+  $("filechip-name").textContent = n === 1 ? dsFileDinhKem[0].name : n + " ảnh";
   chip.classList.add("show");
   capNhatNutGui();
   veChipAnh();

@@ -122,6 +122,38 @@ _SO_SANH_SO_LUONG_RE = re.compile(
 )
 
 
+# Câu hỏi có ý SO SÁNH / liên hệ các ảnh với nhau (viết không dấu). Gửi nhiều ảnh
+# KHÔNG đồng nghĩa với so sánh: không có ý này thì trả lời từng ảnh riêng.
+_SO_SANH_RE = re.compile(
+    r"\b(?:so sanh|doi chieu|khac (?:gi|nhau|biet|nhu the nao|o diem nao|cho nao)|"
+    r"diem khac|giong (?:nhau|khong|gi|nhu)|co giong|giong .* khong|cung (?:loai|mot|giong|loai)|"
+    r"(?:anh|tam|buc) nao\b|ca hai|hai anh nay|cac anh nay deu|"
+    r"compare|comparison|difference|differ|same|similar|which (?:image|one|photo))\b"
+)
+
+
+def la_cau_so_sanh(query: str) -> bool:
+    """Câu hỏi có muốn so sánh / liên hệ các ảnh không (đếm "nhiều hơn" cũng tính)."""
+    chuan = khong_dau(query or "")
+    return bool(_SO_SANH_RE.search(chuan) or _SO_SANH_SO_LUONG_RE.search(chuan))
+
+
+def tra_loi_tung_anh(query: str, ds_so: list, config: Optional[dict]):
+    """Nhiều ảnh nhưng câu hỏi KHÔNG đòi so sánh: hỏi từng ảnh riêng, ghép theo nhãn.
+
+    Mỗi ảnh đi đúng đường một ảnh như bình thường (đường nhanh / YOLO / Gemini).
+    Không trả artifact khung vật thể: giao diện chỉ vẽ khung khi có MỘT ảnh.
+    """
+    from app.agents.vision_agent.tools import SO_ANH_SO_SANH_TOI_DA
+
+    phan = []
+    for so in ds_so[:SO_ANH_SO_SANH_TOI_DA]:
+        ket = vision_tool.func(query, f"IMG{so}", config=config)
+        noi_dung = ket[0] if isinstance(ket, tuple) else ket
+        phan.append(f"**Ảnh {so}:** {noi_dung}")
+    return "\n\n".join(phan), {"per_image": ds_so[:SO_ANH_SO_SANH_TOI_DA]}
+
+
 def cac_bi_danh(query: str, image_path: Optional[str]) -> list:
     """Mọi số ảnh được nhắc tới (giữ thứ tự, bỏ trùng): "IMG1,IMG3", "1, 3", "IMG1 và IMG3".
 
@@ -330,14 +362,20 @@ def vision_tool(
     """Useful for analyzing images, object detection/counting with YOLO, or visual description.
     Input should be a clear query describing what to analyze or detect.
     `image_path` is the image to look at: an id from IMAGE MEMORY such as "IMG3",
-    or a file path / URL exactly as the user gave it. One image per call, EXCEPT to
-    compare 2-5 remembered images: then pass all their ids in one call, comma-separated,
-    e.g. image_path="IMG1,IMG3".
+    or a file path / URL exactly as the user gave it. One image per call, EXCEPT when
+    the user asks to COMPARE 2-5 remembered images: then pass all their ids in one
+    call, comma-separated, e.g. image_path="IMG1,IMG3".
     """
-    # Hướng 6: nhiều ảnh -> một lượt so sánh.
+    # Nhiều ảnh: CHỈ so sánh khi câu hỏi có ý so sánh; không thì trả lời từng ảnh riêng.
     ds_so = cac_bi_danh(query, image_path)
     if len(ds_so) >= 2:
-        return so_sanh_nhieu_anh(query, ds_so, config)
+        # Xét câu hỏi GỐC của người dùng (supervisor có thể tự viết lại thành "so sánh"
+        # dù người dùng không hề hỏi vậy). Không có câu gốc (CLI, test cũ) -> xét query.
+        cau_goc = ((config or {}).get("configurable") or {}).get("user_question") or query
+        if la_cau_so_sanh(cau_goc):
+            return so_sanh_nhieu_anh(query, ds_so, config)
+        # Hỏi từng ảnh bằng chính câu của người dùng (không phải câu supervisor viết lại).
+        return tra_loi_tung_anh(cau_goc, ds_so, config)
 
     so_anh = so_bi_danh(query, image_path)
     image_path, loi = giai_bi_danh_anh(query, image_path, config)

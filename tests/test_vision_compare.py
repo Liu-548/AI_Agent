@@ -189,3 +189,42 @@ def test_prompt_supervisor_day_so_sanh_mot_luot():
 
     assert 'image_path="IMG1,IMG3"' in p
     assert p.format(agent_catalog="x")
+
+
+# ------------- gửi nhiều ảnh KHÔNG có nghĩa là so sánh -------------------- #
+@pytest.mark.parametrize(
+    "cau_hoi, so_sanh",
+    [
+        ("So sánh ba ảnh này", True),
+        ("Ảnh 1 và ảnh 3 khác gì nhau?", True),
+        ("Hai con mèo này có giống nhau không", True),
+        ("Ảnh nào có nhiều chó hơn?", True),
+        ("Có phải cùng loài không?", True),
+        ("Mô tả từng ảnh", False),
+        ("Đây là gì?", False),
+        ("Đếm số người trong ảnh", False),
+        ("Con vật này tên gì", False),
+    ],
+)
+def test_nhan_biet_cau_hoi_so_sanh(cau_hoi, so_sanh):
+    from app.agents.supervisor.tools import la_cau_so_sanh
+
+    assert la_cau_so_sanh(cau_hoi) is so_sanh
+
+
+def test_nhieu_anh_khong_hoi_so_sanh_thi_tra_loi_tung_anh(he):
+    tin = he.hoi("Mô tả ảnh này", "IMG1,IMG3")
+    # hai lượt RIÊNG, mỗi lượt đúng một ảnh, không dùng lời dặn so sánh
+    assert len(he.llm.lan_goi) == 2
+    assert all(len(_anh_trong(m)) == 1 for m in he.llm.lan_goi)
+    from app.agents.vision_agent.prompts import COMPARE_SYSTEM_PROMPT
+
+    assert all(m[0].content != COMPARE_SYSTEM_PROMPT for m in he.llm.lan_goi)
+    assert "**Ảnh 1:**" in tin.content and "**Ảnh 3:**" in tin.content
+    assert "compared_images" not in tin.artifact
+
+
+def test_prompt_supervisor_khong_mac_dinh_so_sanh():
+    from app.agents.supervisor.prompts import SUPERVISOR_PROMPT_TEMPLATE as p
+
+    assert 'does NOT mean "compare them"' in p and "one call PER" in p

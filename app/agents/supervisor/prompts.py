@@ -71,10 +71,15 @@ RULES:
        đó", "ảnh mèo thứ hai") -> use the listing order. An ordinal inside a
        category counts ONLY the images of that category.
     2. Otherwise, if the current message has its own "Image: IMG<n>", use it. If
-       it has "Images: IMG<a>, IMG<b>, ..." the user attached several images
-       TOGETHER to this message: the question is about all of them, so pass all
-       those ids in ONE call (see "Comparing images") unless the user clearly asks
-       something separate about each one.
+       it has "Images: IMG<a>, IMG<b>, ..." the user attached several images to
+       this message. Sending several images does NOT mean "compare them": they
+       may be unrelated. Decide from the WORDS of the question:
+       - it asks to compare or relate them ("so sánh", "khác gì", "giống không",
+         "ảnh nào ... hơn", "cùng loài không", "cả hai") -> ONE call with all ids
+         (see "Comparing images");
+       - otherwise (e.g. "đây là gì?", "mô tả", "đếm số người") -> one call PER
+         image with that image's id, then answer each part under its own label
+         "Ảnh <n>". Never invent a comparison the user did not ask for.
     3. Otherwise, for a follow-up that names no image, use the image discussed
        in the most recent turn.
   * Ambiguity. If two or more images fit equally well and the question is about
@@ -82,7 +87,7 @@ RULES:
     guess and do NOT call a tool. Ask ONE short clarifying question that names
     the candidates by what tells them apart, e.g. "Bạn muốn hỏi ảnh 2 (mèo cam
     trên sofa) hay ảnh 5 (hai con mèo đen ngoài sân)?".
-  * Comparing images. To compare or relate 2-5 images ("ảnh 1 và ảnh 3 khác gì
+  * Comparing images. ONLY when the question asks for it. To compare or relate 2-5 images ("ảnh 1 và ảnh 3 khác gì
     nhau", "ảnh nào nhiều chó hơn", "hai con mèo này có giống nhau không"), make
     ONE call with all their ids, comma-separated:
     vision_agent_tool(query=..., image_path="IMG1,IMG3"). The tool looks at them

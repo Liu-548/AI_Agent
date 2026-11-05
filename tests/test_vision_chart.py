@@ -45,7 +45,7 @@ def test_chu_de_bieu_do_tu_cau_hoi(cau_hoi, mong_doi):
 def test_loi_dan_bieu_do_doi_bang_so_lieu_va_khai_niem():
     loi_dan = topics.CHU_DE["chart"].loi_dan
     assert "Markdown table" in loi_dan and "never invent numbers" in loi_dan
-    assert "KHÁI NIỆM:" in loi_dan
+    assert "KHÁI NIỆM:" in loi_dan and "ĐIỂM NỔI BẬT:" in loi_dan
     assert topics.CHU_DE_IDS[-1] == topics.CHU_DE_CHUNG  # "chung" vẫn là dự phòng cuối
 
 
@@ -59,7 +59,9 @@ def test_ho_so_anh_nhan_chu_de_chart():
 def test_prompt_supervisor_co_luat_noi_vision_sang_research():
     from app.agents.supervisor.prompts import SUPERVISOR_PROMPT_TEMPLATE as p
 
-    assert "CHART -> RESEARCH" in p and "KHÁI NIỆM:" in p
+    assert "IMAGE -> RESEARCH" in p and "KHÁI NIỆM:" in p and "ĐIỂM NỔI BẬT" in p
+    # tìm theo điểm cụ thể của ảnh, lọc bài lạc đề, nói rõ bài nào giải thích điểm nào
+    assert "SPECIFIC" in p and "Relevance check" in p and "Drop papers" in p
     assert "Số liệu từ biểu đồ" in p and "Nghiên cứu liên quan" in p
     assert p.format(agent_catalog="x")
 

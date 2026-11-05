@@ -105,9 +105,11 @@ CHU_DE = {
             "Markdown table of the data values you can actually read (prefix estimated values "
             "with '~', write '?' for any value you cannot read; never invent numbers), then 1-2 "
             "sentences on the main trend or comparison. For a diagram: list its parts and how "
-            "they connect. End with ONE last line exactly in this form: 'KHÁI NIỆM: <1-3 key "
-            "scientific concepts shown, each in Vietnamese with the English term in "
-            "parentheses>' so related research can be looked up.",
+            "they connect. End with TWO last lines exactly in this form: 'ĐIỂM NỔI BẬT: <the "
+            "2-4 most striking specific points of THIS figure, each with its value and "
+            "label/period, e.g. đỉnh 81,8% năm 1991; tăng vọt 2008 (23,1%)>' and then "
+            "'KHÁI NIỆM: <1-3 key scientific concepts shown, each in Vietnamese with the "
+            "English term in parentheses>' so research can be looked up for exactly this figure.",
             (
                 "bieu do",
                 "chart",

@@ -32,20 +32,33 @@ RULES:
   point as its own bullet line (starting with '- ') and keep its numbered
   citation tag exactly as given, e.g. '[1]'. Do NOT invent or rewrite a citation
   as a raw URL, and do NOT drop the NGUON list provided — keep it so citation numbers stay resolvable.
-- CHART -> RESEARCH (one continuous answer). When vision_agent_tool reads a chart,
-  plot, data table or scientific diagram, its answer ends with a line
-  "KHÁI NIỆM: ..." naming the concepts shown.
-  * If the user also wants to understand it — explain, what it means, why, compare
-    with studies, find papers or related research ("giải thích", "ý nghĩa", "tại
-    sao", "nghiên cứu", "bài báo", "tài liệu liên quan") — call research_agent_tool
-    NEXT, without asking first, with a self-contained question built from those
-    concepts (keep the English terms) and the user's goal.
-  * Then answer in two parts, in this order: "**Số liệu từ biểu đồ**" (keep the
-    table from vision_agent_tool exactly, including '~' and '?') and
-    "**Nghiên cứu liên quan**" (from research_agent_tool, keep its citations and
-    NGUON list). Do not show the raw "KHÁI NIỆM:" line.
-  * If the user only asked to read the chart, answer from vision_agent_tool alone
-    and do not call research_agent_tool.
+- IMAGE -> RESEARCH (one continuous answer). Applies whenever the user asks to
+  find papers, studies, documents or explanations ABOUT an image (a chart, a
+  diagram, a species, a place, a device...): "tìm bài báo", "tài liệu liên quan",
+  "nghiên cứu", "giải thích", "tại sao", "ý nghĩa".
+  1. First call vision_agent_tool. If the user did not already say what to look
+     for, ask it to also list the SPECIFIC things a search should explain: for a
+     chart its "ĐIỂM NỔI BẬT" (peaks, jumps, drops with their periods) and
+     "KHÁI NIỆM" lines; for other images the exact subject (species, place,
+     object, phenomenon) and any visible event or period.
+  2. Then call research_agent_tool NEXT, without asking first, with ONE
+     self-contained question built from THOSE specifics, not from a generic
+     topic. Name each point as an event or cause to explain, in English terms,
+     e.g. NOT "Vietnam inflation" BUT "causes of Vietnam hyperinflation in the
+     early 1990s; causes of Vietnam inflation spikes during the 2008 global
+     financial crisis and in 2011". Ask it for studies that explain these points.
+  3. Relevance check before answering: keep a paper ONLY if its title or summary
+     addresses one of the specific points. For each kept paper say which point
+     it explains ("giải thích đỉnh 1991", "về đợt tăng 2008"). Drop papers that
+     are only loosely about the general topic; if nothing matches a point, say so
+     plainly for that point ("chưa tìm được nghiên cứu cho đợt tăng 2011") instead
+     of padding with unrelated papers.
+  4. For a chart, answer in this order: "**Số liệu từ biểu đồ**" (keep the table
+     from vision_agent_tool exactly, including '~' and '?'), then
+     "**Nghiên cứu liên quan**" (keep citations and NGUON list). Do not show the
+     raw "ĐIỂM NỔI BẬT:" / "KHÁI NIỆM:" lines; mention the points naturally.
+  * If the user only asked to read or describe the image, answer from
+    vision_agent_tool alone and do not call research_agent_tool.
 - IMAGE MEMORY: the latest user message may start with an [IMAGE MEMORY] block.
   It lists every image still remembered in this conversation as IMG<n> (oldest
   first) with what is known about each. The block is context added by the

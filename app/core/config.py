@@ -258,6 +258,11 @@ class Settings:
     # lần gọi LLM của lượt mới (supervisor + agent con + tổng hợp). Để quá cao vừa
     # đốt hạn mức vừa dễ dính 400 output_parse_failed vì hội thoại phình to.
     history_max_turns: int = field(default_factory=lambda: _env_int("HISTORY_MAX_TURNS", 6))
+    # Moi cau tra loi CU gui lai cho agent chi giu toi da chung nay ky tu. Cau tra loi
+    # co bang 34 dong / danh sach bai bao rat dai, gui nguyen ca 6 luot la cach nhanh
+    # nhat lam supervisor het ngan sach token. Phan dau cau tra loi la du de hieu
+    # "hoi tiep". 0 = khong cat.
+    history_max_chars: int = field(default_factory=lambda: _env_int("HISTORY_MAX_CHARS", 700))
 
     # --- Bộ nhớ ảnh theo hội thoại (app/image_memory.py, chỉ web UI dùng) ---
     #

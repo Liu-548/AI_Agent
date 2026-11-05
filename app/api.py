@@ -501,8 +501,57 @@ def _lich_su_cho_graph(
                 noi_dung = f"{noi_dung}\nImage: {image_memory.bi_danh(so_anh)}"
             elif so_anh is None and duong_dan and Path(duong_dan).exists():
                 noi_dung = f"{noi_dung}\nImage: {duong_dan}"
+        else:
+            noi_dung = _rut_gon_tra_loi_cu(noi_dung)
         ket_qua.append({"role": m["role"], "content": noi_dung})
     return ket_qua
+
+
+def _rut_gon_tra_loi_cu(text: str, toi_da: Optional[int] = None) -> str:
+    """Cat cau tra loi CU (gui lai lam lich su) con `HISTORY_MAX_CHARS` ky tu.
+
+    Giu phan dau (thuong la cau tra loi chinh), cat o cuoi dong gan nhat, ghi ro da
+    rut gon de model khong tuong do la toan bo. Bang so lieu dai la thu bi cat
+    nhieu nhat - dung la thu lam supervisor het ngan sach token.
+    """
+    toi_da = settings.history_max_chars if toi_da is None else toi_da
+    if toi_da <= 0 or len(text) <= toi_da:
+        return text
+    cat = text[:toi_da]
+    xuong_dong = cat.rfind("\n")
+    if xuong_dong > toi_da // 2:
+        cat = cat[:xuong_dong]
+    return cat.rstrip() + "\n…(câu trả lời cũ đã được rút gọn)"
+
+
+def _ghi_log_tra_loi_rong(result: dict, so_tin_lich_su: int) -> None:
+    """Supervisor tra RONG: ghi finish_reason + so token ra terminal.
+
+    Day la bang chung nhom can truoc khi quyet dinh co ha reasoning_effort cua
+    supervisor hay khong (NHATKY_PHAT_TRIEN_RESEARCH_AGENT.md, muc 2026-08-30).
+    """
+    try:
+        cuoi = (result.get("messages") or [None])[-1]
+        meta = getattr(cuoi, "response_metadata", None) or {}
+        dung = (meta.get("token_usage") or {})
+        chi_tiet = dung.get("completion_tokens_details") or {}
+        print(
+            "[supervisor-rong] finish_reason=%s prompt_tokens=%s completion_tokens=%s "
+            "reasoning_tokens=%s lich_su=%d tin"
+            % (
+                meta.get("finish_reason"), dung.get("prompt_tokens"), dung.get("completion_tokens"),
+                chi_tiet.get("reasoning_tokens"), so_tin_lich_su,
+            ),
+            flush=True,
+        )
+    except Exception:  # noqa: BLE001 - chi la log
+        pass
+
+
+TRA_LOI_RONG = (
+    "Hội thoại này đã quá dài nên AI tổng hợp không trả lời được. "
+    "Hãy bấm \"Cuộc trò chuyện mới\" rồi hỏi lại."
+)
 
 
 def _ghi_nho_anh(
@@ -1086,11 +1135,25 @@ def ask_supervisor(
             config=run_config,
         )
         answer = _final_answer(result)
+        if not answer.strip():
+            _ghi_log_tra_loi_rong(result, len(lich_su))
+        if not answer.strip() and lich_su and not _tool_messages(result):
+            # Supervisor tra RONG ma chua goi tool nao (chua ton luot Gemini): gan nhu
+            # luon la do lich su qua dai. Thu lai MOT lan chi voi luot gan nhat.
+            result = graph.invoke(
+                {"messages": lich_su[-2:] + [{"role": "user", "content": message}]},
+                config=run_config,
+            )
+            answer = _final_answer(result)
         tool_outputs = _collect_tool_outputs(result)
         # Ket qua tool cua agent con (vd detect_and_count_objects) chi co trong tool_sink.
         for ten, noi_dung in tool_sink.items():
             tool_outputs.setdefault(ten, noi_dung)
         agents_used, agent_answers = _extract_agent_trace(result)
+        if not answer.strip():
+            # Van rong: khong bao gio de UI hien "(khong co noi dung tra ve)". Agent con
+            # da tra loi thi UI van hien phan cua tung agent ben duoi cau bao nay.
+            answer = TRA_LOI_RONG
 
         response: dict = {"answer": answer, "agents_used": agents_used}
         if "research_agent" in agents_used and settings.research_arch == "topics":

@@ -589,6 +589,12 @@ body.gon .route,body.gon .agent-note{display:none;}
 .vd-k span{display:block;font-size:11px;padding:3px 6px;}
 .vd-k.on{border-color:var(--vision);color:var(--text);}
 .vd-nhan{font-size:11.5px;color:var(--muted);margin-bottom:6px;}
+.vd-phat{font-family:inherit;font-size:13px;font-weight:650;cursor:pointer;border:none;border-radius:999px;
+  padding:8px 16px;margin:4px 0 6px;background:var(--vision);color:#1a1204;}
+.vd-live{position:relative;line-height:0;margin:6px 0 8px;}
+.vd-live video{width:100%;max-height:70vh;display:block;border-radius:10px;background:#000;}
+.vd-live canvas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
+.vd-trang{font-size:12.5px;color:var(--text-2);margin-bottom:6px;}
 .bubble-user .vd-nhan-tin{display:block;margin-top:5px;font-size:12px;color:var(--muted);}
 .khung-dong .tag{font-size:10.5px;color:var(--muted);margin-left:6px;}
 .khung-dong .ten{flex:1;text-align:left;}
@@ -1724,7 +1730,154 @@ function htmlKhungVatThe(e, anhNguon) {
 /* Video (nhom C-7): bieu do so dem theo thoi gian + day khung; bam khung de xem khung
    vat the cua khung do (dung lai htmlKhungVatThe). Du lieu de theo id trong VIDEO_DATA. */
 const VIDEO_DATA = {};
+const VIDEO_URL = {};
 let demVideo = 0;
+
+/* ===== YOLO chay NGAY TRONG TRINH DUYET (onnxruntime-web) khi phat video =====
+   Cung file yolo11n.onnx cua server (GET /api/model/yolo.onnx), ten lop lay tu
+   /api/model/info. Thu vien ghim dung phien ban 1.20.1 = onnxruntime cua server.
+   Chay tren CPU (WASM, 1 luong) cua may nguoi dung: server khong ton gi. */
+const ORT_CDN = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+let yoloWeb = null;
+
+function napScript(src) {
+  return new Promise((ok, loi) => {
+    const el = document.createElement("script");
+    el.src = src; el.onload = ok;
+    el.onerror = () => loi(new Error("Không tải được thư viện ONNX cho trình duyệt (cần kết nối mạng)."));
+    document.head.appendChild(el);
+  });
+}
+
+function napYoloWeb(baoTien) {
+  if (!yoloWeb) {
+    yoloWeb = (async () => {
+      if (!window.ort) { baoTien("Đang tải thư viện ONNX…"); await napScript(ORT_CDN + "ort.wasm.min.js"); }
+      ort.env.wasm.wasmPaths = ORT_CDN;
+      ort.env.wasm.numThreads = 1;
+      baoTien("Đang tải model YOLO (khoảng 10MB, chỉ lần đầu)…");
+      const info = await api("/api/model/info");
+      const res = await fetch(state.apiBase + "/api/model/yolo.onnx");
+      if (!res.ok) throw new Error("Server chưa có file yolo11n.onnx.");
+      const buf = await res.arrayBuffer();
+      baoTien("Đang khởi động model…");
+      const session = await ort.InferenceSession.create(buf, { executionProviders: ["wasm"] });
+      const S = info.imgsz || 640;
+      const cv = document.createElement("canvas"); cv.width = S; cv.height = S;
+      return { session, S, cv, ctx: cv.getContext("2d", { willReadFrequently: true }), buf: new Float32Array(3 * S * S),
+        names: info.names, tenViet: info.ten_viet || {}, conf: Math.max(0.3, info.conf || 0.25), iou: info.iou || 0.45 };
+    })();
+    yoloWeb.catch(() => { yoloWeb = null; });
+  }
+  return yoloWeb;
+}
+
+function nmsLop(ds, iou) {
+  ds.sort((a, b) => b.s - a.s);
+  const giu = [];
+  for (const b of ds) {
+    if (giu.every((g) => g.c !== b.c || iouHop(g, b) <= iou)) giu.push(b);
+  }
+  return giu;
+}
+function iouHop(a, b) {
+  const x1 = Math.max(a.x1, b.x1), y1 = Math.max(a.y1, b.y1), x2 = Math.min(a.x2, b.x2), y2 = Math.min(a.y2, b.y2);
+  const chong = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  return chong / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - chong + 1e-9);
+}
+
+/* Mot lan nhan dien tren khung hien tai cua video -> [{c, s, x1, y1, x2, y2}] theo pixel video. */
+async function yoloKhung(m, v) {
+  const W = v.videoWidth, H = v.videoHeight, S = m.S;
+  const tl = Math.min(S / W, S / H), nw = Math.round(W * tl), nh = Math.round(H * tl);
+  const dx = Math.floor((S - nw) / 2), dy = Math.floor((S - nh) / 2);
+  m.ctx.fillStyle = "rgb(114,114,114)"; m.ctx.fillRect(0, 0, S, S);
+  m.ctx.drawImage(v, dx, dy, nw, nh);
+  const d = m.ctx.getImageData(0, 0, S, S).data, f = m.buf, SS = S * S;
+  for (let i = 0; i < SS; i++) { f[i] = d[4 * i] / 255; f[SS + i] = d[4 * i + 1] / 255; f[2 * SS + i] = d[4 * i + 2] / 255; }
+  const ra = await m.session.run({ [m.session.inputNames[0]]: new ort.Tensor("float32", f, [1, 3, S, S]) });
+  const o = ra[m.session.outputNames[0]], C = o.dims[1], N = o.dims[2], x = o.data;
+  const ds = [];
+  for (let j = 0; j < N; j++) {
+    let tot = 0, lop = -1;
+    for (let c = 4; c < C; c++) { const sc = x[c * N + j]; if (sc > tot) { tot = sc; lop = c - 4; } }
+    if (tot < m.conf) continue;
+    const cx = x[j], cy = x[N + j], w = x[2 * N + j], h = x[3 * N + j];
+    ds.push({ c: lop, s: tot, x1: (cx - w / 2 - dx) / tl, y1: (cy - h / 2 - dy) / tl, x2: (cx + w / 2 - dx) / tl, y2: (cy + h / 2 - dy) / tl });
+  }
+  return nmsLop(ds, m.iou);
+}
+
+function veKhungLive(st, ds) {
+  const cv = st.cv, v = st.v;
+  const r = v.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(r.width * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  /* Video hien kieu "contain": tinh dung vung hinh that (co the co vien den hai ben). */
+  const k = Math.min(cv.width / v.videoWidth, cv.height / v.videoHeight);
+  const ox = (cv.width - v.videoWidth * k) / 2, oy = (cv.height - v.videoHeight * k) / 2;
+  g.lineWidth = 2 * dpr; g.font = (11 * dpr) + "px Inter, sans-serif"; g.textBaseline = "top";
+  const dem = {};
+  ds.forEach((b) => {
+    const ten = st.m.names[b.c];
+    dem[ten] = (dem[ten] || 0) + 1;
+    if (st.loc.size && !st.loc.has(ten)) return;
+    const mau = MAU_LOP[b.c % MAU_LOP.length];
+    const x = ox + b.x1 * k, y = oy + b.y1 * k, w = (b.x2 - b.x1) * k, h = (b.y2 - b.y1) * k;
+    g.strokeStyle = mau; g.strokeRect(x, y, w, h);
+    const nhan = (st.m.tenViet[ten] || ten) + " " + Math.round(b.s * 100) + "%";
+    const tw = g.measureText(nhan).width + 8 * dpr;
+    g.fillStyle = mau; g.fillRect(x, Math.max(0, y - 16 * dpr), tw, 16 * dpr);
+    g.fillStyle = "#111"; g.fillText(nhan, x + 4 * dpr, Math.max(0, y - 16 * dpr) + 2 * dpr);
+  });
+  return dem;
+}
+
+async function batDauLive(nut) {
+  const id = nut.dataset.vdPhat, url = VIDEO_URL[id], hop = nut.closest("[data-vd-live]");
+  if (!url || !hop) return;
+  const bao = (t) => { hop.innerHTML = '<div class="vd-nhan">' + escapeHtml(t) + "</div>"; };
+  let m;
+  try { m = await napYoloWeb(bao); } catch (e) { bao((e && e.message) || "Không khởi động được YOLO trên trình duyệt."); return; }
+  hop.innerHTML = '<div class="vd-live"><video src="' + url + '" controls playsinline muted></video><canvas></canvas></div>' +
+    '<div class="vd-trang" aria-live="polite">Bấm ▶ trên video để chạy.</div><div class="chips vd-chip"></div>';
+  const st = { m, v: hop.querySelector("video"), cv: hop.querySelector("canvas"), trang: hop.querySelector(".vd-trang"),
+    chip: hop.querySelector(".vd-chip"), loc: new Set(), lastT: -1, dangChay: false, tocDo: 0 };
+  st.chip.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-live-lop]");
+    if (!b) return;
+    const ten = b.dataset.liveLop;
+    st.loc.has(ten) ? st.loc.delete(ten) : st.loc.add(ten);
+    st.lastT = -1;
+  });
+  const vong = async () => {
+    if (!document.body.contains(st.v)) return;  /* panel da bi xoa (doi hoi thoai) */
+    if (st.v.readyState >= 2 && st.v.currentTime !== st.lastT && !st.dangChay) {
+      st.dangChay = true;
+      const t0 = performance.now(), t = st.v.currentTime;
+      try {
+        const ds = await yoloKhung(m, st.v);
+        const dem = veKhungLive(st, ds);
+        st.lastT = t;
+        const ms = performance.now() - t0;
+        st.tocDo = st.tocDo ? st.tocDo * 0.8 + ms * 0.2 : ms;
+        const tong = Object.values(dem).reduce((a, b) => a + b, 0);
+        st.trang.textContent = "YOLO trên máy bạn · " + (1000 / st.tocDo).toFixed(1).replace(".", ",") + " lần/giây · " +
+          tong + " vật lúc " + giayVN(t) + (st.loc.size ? " · đang lọc" : "");
+        st.chip.innerHTML = Object.entries(dem).sort((a, b) => b[1] - a[1]).map(([ten, so]) =>
+          '<button type="button" class="chip chip-lop' + (st.loc.has(ten) ? " on" : "") + '" data-live-lop="' + escapeHtml(ten) + '"><b>' + so + "</b> " +
+          escapeHtml((m.tenViet[ten] || ten).toLowerCase()) + "</button>").join("");
+      } catch (e) {
+        st.trang.textContent = "Lỗi khi chạy YOLO: " + ((e && e.message) || e);
+      }
+      st.dangChay = false;
+    }
+    requestAnimationFrame(vong);
+  };
+  st.v.addEventListener("loadeddata", () => { st.lastT = -1; });
+  requestAnimationFrame(vong);
+}
 const MAU_LOP = ["#f0a952", "#5b8def", "#3ecf8e", "#e5484d", "#a78bfa", "#00c7be"];
 
 function htmlKhungMotKhung(v, i) {
@@ -1771,7 +1924,12 @@ function htmlVideo(e) {
   const day = v.frames.map((f, i) => '<button type="button" class="vd-k' + (i === tot ? " on" : "") + '" data-vd-khung="' + i + '">' +
     (v.thumbs && v.thumbs[i] ? '<img src="data:image/jpeg;base64,' + v.thumbs[i] + '" alt="">' : "") +
     "<span>" + giayVN(f.t) + " · " + tong(f) + " vật</span></button>").join("");
-  return '<div class="panel" data-video="' + id + '"><h2>Video ' + (v.duration ? giayVN(v.duration) + " " : "") + "· đếm theo thời gian (" + n + " khung)</h2>" +
+  if (e.__videoUrl) VIDEO_URL[id] = e.__videoUrl;
+  const phat = e.__videoUrl
+    ? '<div data-vd-live><button type="button" class="vd-phat" data-vd-phat="' + id + '">▶ Phát video với ô nhận diện</button>' +
+      '<span class="vd-nhan"> YOLO chạy ngay trên máy bạn, ô vuông bám theo vật khi video chạy. Lần đầu tải khoảng 10MB.</span></div>'
+    : '<div class="vd-nhan">Muốn xem video kèm ô nhận diện trực tiếp, hãy gửi lại video (video gốc không được lưu cùng lịch sử).</div>';
+  return '<div class="panel" data-video="' + id + '"><h2>Video ' + (v.duration ? giayVN(v.duration) + " " : "") + "· đếm theo thời gian (" + n + " khung)</h2>" + phat +
     (lop.length ? '<svg class="vd-bieu" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Số vật thể theo thời gian">' + svg + "</svg>" +
       '<div class="chips">' + chuGiai + "</div>" : "") +
     '<div class="vd-tt">' + escapeHtml(v.summary || "") + "</div>" +
@@ -2094,7 +2252,8 @@ async function gui(cauHoi, dsFile, video) {
     const data = await api("/api/ask", { method: "POST", body: body, signal: state.boDung.signal });
     const dots = turn.querySelector(".cho");
     const { answer, ...extras } = data;
-    dots.outerHTML = htmlTraLoi(answer, extras, anhTam);
+    /* __videoUrl chi de ve giao dien luot nay (phat lai video goc), khong luu. */
+    dots.outerHTML = htmlTraLoi(answer, video ? Object.assign({}, extras, { __videoUrl: video.url }) : extras, anhTam);
     kichHoatKhung(turn);
     /* Server vua danh so cho anh nay -> hien "Anh N" duoi anh vua gui. */
     const anhVuaGui = turn.querySelector(".bubble-user > img");
@@ -2410,7 +2569,8 @@ async function tachKhungVideo(file) {
     frames.push(new File([blob], "khung_" + i + ".jpg", { type: "image/jpeg" }));
   }
   URL.revokeObjectURL(v.src);
-  return { ten: file.name, frames, times: moc.map((t) => Math.round(t * 100) / 100), duration: Math.round(dai * 100) / 100, poster: URL.createObjectURL(frames[0]) };
+  return { ten: file.name, url: URL.createObjectURL(file), frames, times: moc.map((t) => Math.round(t * 100) / 100),
+    duration: Math.round(dai * 100) / 100, poster: URL.createObjectURL(frames[0]) };
 }
 
 async function datVideo(file) {
@@ -2575,6 +2735,8 @@ function ganSuKien() {
 
   /* --- video: bam mot khung trong day -> xem khung vat the cua khung do --- */
   $("thread").addEventListener("click", (e) => {
+    const nutPhat = e.target.closest("[data-vd-phat]");
+    if (nutPhat) { batDauLive(nutPhat); return; }
     const k = e.target.closest("[data-vd-khung]");
     if (!k) return;
     const hop = k.closest("[data-video]");

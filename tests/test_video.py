@@ -140,3 +140,17 @@ def test_xem_khung_video_mot_luot(monkeypatch, tmp_path):
     assert len(goi) == 1 and goi[0][0].content.startswith(VIDEO_FRAMES_SYSTEM_PROMPT)
     nhan = [p["text"] for p in goi[0][1].content if p.get("type") == "text"]
     assert "Khung 1:" in nhan and "Khung 3:" in nhan
+
+
+def test_phuc_vu_model_cho_trinh_duyet(he):  # noqa: F811
+    """Trình duyệt tải đúng file .onnx và danh sách tên lớp theo thứ tự trong model."""
+    import pytest
+
+    pytest.importorskip("onnxruntime")
+    if he.api._file_model_onnx() is None:
+        pytest.skip("chưa có yolo11n.onnx")
+    info = he.client.get("/api/model/info").json()
+    assert len(info["names"]) == 80 and info["names"][0] == "person" and info["names"][16] == "dog"
+    assert info["ten_viet"]["dog"] == "chó" and info["imgsz"] == 640
+    r = he.client.get("/api/model/yolo.onnx")
+    assert r.status_code == 200 and len(r.content) > 1_000_000

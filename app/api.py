@@ -1379,6 +1379,43 @@ def summarize(
 
 
 # --------------------------------------------------------------------------- #
+# Model YOLO cho trinh duyet (video: o vuong bam theo vat khi phat)
+# --------------------------------------------------------------------------- #
+# Trinh duyet tu chay CHINH file yolo11n.onnx bang onnxruntime-web: o vuong bam theo
+# vat khi video dang phat ma server khong ton them CPU/RAM nao (Render Free 512MB).
+def _file_model_onnx() -> Optional[Path]:
+    goc = Path(__file__).resolve().parent.parent
+    for ung_vien in (Path(settings.yolo_weights), goc / settings.yolo_weights, goc / "yolo11n.onnx"):
+        if ung_vien.suffix.lower() == ".onnx" and ung_vien.is_file():
+            return ung_vien
+    return None
+
+
+@app.get("/api/model/yolo.onnx", include_in_schema=False)
+def tai_model_yolo():
+    tep = _file_model_onnx()
+    if tep is None:
+        raise HTTPException(status_code=404, detail="Chua co file yolo11n.onnx tren server.")
+    return FileResponse(tep, media_type="application/octet-stream",
+                        headers={"Cache-Control": "public, max-age=604800"})
+
+
+@app.get("/api/model/info")
+def thong_tin_model():
+    """Ten 80 lop (dung thu tu trong model) + ten tieng Viet + co anh dau vao."""
+    tep = _file_model_onnx()
+    if tep is None:
+        raise HTTPException(status_code=404, detail="Chua co file yolo11n.onnx tren server.")
+    from app.agents.vision_agent.labels import COCO_VI
+    from app.agents.vision_agent.onnx_detector import _nap_phien
+
+    _phien, ten_lop, canh = _nap_phien(str(tep))
+    names = [ten_lop[i] for i in sorted(ten_lop)]
+    return {"names": names, "imgsz": canh, "ten_viet": {n: COCO_VI.get(n, n) for n in names},
+            "conf": settings.yolo_conf, "iou": settings.yolo_iou}
+
+
+# --------------------------------------------------------------------------- #
 # Web UI - de FastAPI phuc vu luon trang web
 # --------------------------------------------------------------------------- #
 # Mot dia chi duy nhat cho ca API lan giao dien: gui mot link la ca lop vao test

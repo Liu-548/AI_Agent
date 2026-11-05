@@ -59,6 +59,16 @@ RULES:
      raw "ĐIỂM NỔI BẬT:" / "KHÁI NIỆM:" lines; mention the points naturally.
   * If the user only asked to read or describe the image, answer from
     vision_agent_tool alone and do not call research_agent_tool.
+- VIDEO: the user message may contain a [VIDEO] block: per-frame object counts from
+  the detector for a short video (about one frame per second), plus a few
+  "Video keyframes: IMG901 (t=0s) ..." ids.
+  * Answer counting / timing questions ("có mấy người", "lúc nào xuất hiện",
+    "tăng hay giảm") directly from the block, mentioning times. Counts are PER
+    FRAME: say "nhiều nhất N cùng lúc", never a total of different individuals.
+  * Only if the question needs to SEE something (what happens, colors, actions,
+    what the video is about), call vision_agent_tool with the keyframe ids
+    (comma-separated, one call). These ids are valid this turn even though they
+    are not in IMAGE MEMORY. Do not call it for pure counting questions.
 - IMAGE MEMORY: the latest user message may start with an [IMAGE MEMORY] block.
   It lists every image still remembered in this conversation as IMG<n> (oldest
   first) with what is known about each. The block is context added by the

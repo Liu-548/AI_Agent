@@ -266,6 +266,31 @@ def _research_extras(result: dict, answer: str, response: dict) -> None:
         response["link_map"] = links
 
 
+def _video_cho_ui(ket: dict, duong_dan: List[Path], thoi_luong: float) -> dict:
+    """Du lieu video cho UI: dong thoi gian so dem + khung tung khung hinh + anh nho."""
+    kich_thuoc = None
+    if duong_dan:
+        try:
+            kich_thuoc = list(mo_anh_dung_huong(duong_dan[0]).size)
+        except Exception:  # noqa: BLE001
+            kich_thuoc = None
+    thumbs = []
+    for p in duong_dan:
+        try:
+            thumbs.append(_thumb_nho_tu_bytes(Path(p).read_bytes(), 360))
+        except OSError:
+            thumbs.append("")
+    return {
+        "duration": round(float(thoi_luong or 0), 2),
+        "frames": ket["frames"],
+        "classes": ket["classes"],
+        "summary": ket["summary"],
+        "image_size": kich_thuoc,
+        "thumbs": thumbs,
+        "ten_viet": nhan_viet(ket["classes"].keys()),
+    }
+
+
 def _so_sanh_extras(result: dict, response: dict) -> None:
     """Luot so sanh nhieu anh (huong 6): them `compared_images` ([1, 3]) va so dem YOLO
     cua tung anh (neu cau hoi la cau dem) de UI hien dai anh da so sanh."""
@@ -1059,6 +1084,11 @@ def ask_supervisor(
     files: List[UploadFile] = File(
         None, description=f"Nhieu anh trong MOT tin nhan (vd de so sanh), toi da {SO_ANH_MOI_LUOT_TOI_DA}"
     ),
+    video_frames: List[UploadFile] = File(
+        None, description="Khung hinh cua video ngan, TRINH DUYET da tach san (~1 khung/giay, toi da 8)"
+    ),
+    video_times: str = Form("", description='Thoi diem (giay) cua tung khung, JSON vd "[0,1,2]"'),
+    video_duration: float = Form(0.0, description="Do dai video (giay), toi da 10"),
     authorization: Optional[str] = Header(None),
 ):
     """Di qua Supervisor, co nho ngu canh cua chinh hoi thoai do.
@@ -1087,6 +1117,21 @@ def ask_supervisor(
             status_code=400, detail=f"Toi da {SO_ANH_MOI_LUOT_TOI_DA} anh trong mot tin nhan."
         )
     saved_paths: List[Path] = []
+    khung_video = [f for f in (video_frames or []) if f is not None and f.filename]
+    thoi_diem_video: List[float] = []
+    if khung_video:
+        from app.agents.vision_agent.video import SO_KHUNG_TOI_DA, THOI_LUONG_TOI_DA
+
+        if len(khung_video) > SO_KHUNG_TOI_DA:
+            raise HTTPException(status_code=400, detail=f"Video: toi da {SO_KHUNG_TOI_DA} khung hinh.")
+        if video_duration > THOI_LUONG_TOI_DA + 0.5:
+            raise HTTPException(status_code=400, detail=f"Video dai toi da {THOI_LUONG_TOI_DA:.0f} giay.")
+        try:
+            thoi_diem_video = [float(x) for x in json.loads(video_times or "[]")]
+        except (ValueError, TypeError):
+            thoi_diem_video = []
+        if len(thoi_diem_video) != len(khung_video):
+            thoi_diem_video = [float(i) for i in range(len(khung_video))]
 
     try:
         for f in tai_len:
@@ -1166,6 +1211,29 @@ def ask_supervisor(
             # Khach vang lai gui MOT anh: khong luu gi nen khong co bo nho anh, giu cach cu.
             message = f"{question}\nImage: {saved_path}"
 
+        # Video ngan (nhom C-7): YOLO dem tung khung -> dong thoi gian + tom tat.
+        ket_video: Optional[dict] = None
+        duong_dan_khung: List[Path] = []
+        if khung_video:
+            from app.agents.vision_agent.video import khoi_cho_supervisor, phan_tich_khung_hinh
+
+            duong_dan_khung = [_save_upload(f) for f in khung_video]
+            ket_video = phan_tich_khung_hinh([str(p) for p in duong_dan_khung], thoi_diem_video, question)
+            message = f"{message}\n\n{khoi_cho_supervisor(ket_video, video_duration or (thoi_diem_video[-1] + 1))}"
+            # Khung chinh (dau, giua, cuoi) cho vision_agent_tool neu cau hoi can NHIN (video ve
+            # gi, mau gi...). So 901+ de khong trung so anh that trong bo nho hoi thoai.
+            n = len(duong_dan_khung)
+            chon = sorted({0, n // 2, n - 1})
+            anh_kf = {901 + i: str(duong_dan_khung[j]) for i, j in enumerate(chon)}
+            if bo_giai is None:
+                bo_giai = image_memory.BoGiaiAnh(None, [], UPLOAD_DIR, anh_moi=anh_kf)
+                run_config["configurable"]["image_resolver"] = bo_giai
+            else:
+                bo_giai.anh_moi.update(anh_kf)
+            message += "\nVideo keyframes: " + ", ".join(
+                f"IMG{so} (t={thoi_diem_video[j]:g}s)" for so, j in zip(anh_kf, chon)
+            ) + " (frames of the video above, NOT separate photos)"
+
         graph = _get_supervisor_graph()
         result = graph.invoke(
             {"messages": lich_su + [{"role": "user", "content": message}]},
@@ -1201,7 +1269,9 @@ def ask_supervisor(
         _extract_vision_extras(tool_outputs, response)
         _research_extras(result, answer, response)
         _so_sanh_extras(result, response)
-        if "compared_images" not in response:
+        if ket_video is not None:
+            response["video"] = _video_cho_ui(ket_video, duong_dan_khung, video_duration)
+        elif "compared_images" not in response:
             _bo_sung_khung_yolo(saved_path, question, response)
 
         warnings = [
@@ -1244,6 +1314,9 @@ def ask_supervisor(
                     extras_user["image_nos"] = ds_so_anh
                     response["image_nos"] = ds_so_anh
                     extras_user["image_thumbs_base64"] = anh_nho
+            if ket_video is not None and response["video"]["thumbs"]:
+                extras_user["video_thumb_base64"] = response["video"]["thumbs"][0]
+                extras_user["video_duration"] = response["video"]["duration"]
             store.them_tin_nhan(cid, "user", question, extras_user)
             store.them_tin_nhan(
                 cid,

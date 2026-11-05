@@ -154,6 +154,28 @@ def tra_loi_tung_anh(query: str, ds_so: list, config: Optional[dict]):
     return "\n\n".join(phan), {"per_image": ds_so[:SO_ANH_SO_SANH_TOI_DA]}
 
 
+# Số bí danh dành cho khung hình chính của video (app/api.py đặt IMG901, IMG902...).
+SO_KHUNG_VIDEO_DAU = 901
+
+
+def xem_khung_video(query: str, ds_so: list, config: Optional[dict]):
+    """Nhóm C-7: một lượt model nhìn các khung chính của video, theo thứ tự thời gian."""
+    from app.agents.vision_agent.prompts import VIDEO_FRAMES_SYSTEM_PROMPT
+    from app.agents.vision_agent.tools import tra_loi_nhieu_anh
+
+    giai = ((config or {}).get("configurable") or {}).get("image_resolver")
+    anh = []
+    for i, so in enumerate(sorted(ds_so)):
+        duong_dan = giai(so) if giai is not None else None
+        if not duong_dan:
+            return tool_error("IMAGE_NOT_IN_MEMORY", f"Video keyframe IMG{so} is not available."), {}
+        anh.append((i + 1, duong_dan))
+    tra_loi = tra_loi_nhieu_anh(
+        anh, query, system_prompt=VIDEO_FRAMES_SYSTEM_PROMPT, tien_to="Khung"
+    )
+    return tra_loi, {}
+
+
 def cac_bi_danh(query: str, image_path: Optional[str]) -> list:
     """Mọi số ảnh được nhắc tới (giữ thứ tự, bỏ trùng): "IMG1,IMG3", "1, 3", "IMG1 và IMG3".
 
@@ -368,6 +390,9 @@ def vision_tool(
     """
     # Nhiều ảnh: CHỈ so sánh khi câu hỏi có ý so sánh; không thì trả lời từng ảnh riêng.
     ds_so = cac_bi_danh(query, image_path)
+    # Khung hình chính của video (IMG901+): xem cùng lúc như MỘT cảnh theo thời gian.
+    if ds_so and all(so >= SO_KHUNG_VIDEO_DAU for so in ds_so):
+        return xem_khung_video(query, ds_so, config)
     if len(ds_so) >= 2:
         # Xét câu hỏi GỐC của người dùng (supervisor có thể tự viết lại thành "so sánh"
         # dù người dùng không hề hỏi vậy). Không có câu gốc (CLI, test cũ) -> xét query.

@@ -185,6 +185,8 @@ def tra_loi_nhieu_anh(
     cau_hoi: str,
     vision_llm=None,
     so_dem: Optional[dict] = None,
+    system_prompt: Optional[str] = None,
+    tien_to: str = "Ảnh",
 ) -> str:
     """MỘT lượt model nhìn 2-5 ảnh cùng lúc và trả lời câu hỏi so sánh.
 
@@ -205,7 +207,7 @@ def tra_loi_nhieu_anh(
         image_url: dict = {"url": f"data:{mime};base64,{b64}"}
         if settings.vision_detail:
             image_url["detail"] = settings.vision_detail
-        noi_dung.append({"type": "text", "text": f"Ảnh {nhan}:"})
+        noi_dung.append({"type": "text", "text": f"{tien_to} {nhan}:"})
         noi_dung.append({"type": "image_url", "image_url": image_url})
     if so_dem:
         dong = []
@@ -215,7 +217,8 @@ def tra_loi_nhieu_anh(
         noi_dung.append({"type": "text", "text": "Object counts measured by the detector (YOLO):\n" + "\n".join(dong)})
 
     loi_dan = loi_dan_hien_tai()
-    system_prompt = f"{COMPARE_SYSTEM_PROMPT}\n\n{loi_dan}" if loi_dan else COMPARE_SYSTEM_PROMPT
+    goc = system_prompt or COMPARE_SYSTEM_PROMPT
+    system_prompt = f"{goc}\n\n{loi_dan}" if loi_dan else goc
     try:
         llm = vision_llm
         if llm is None:

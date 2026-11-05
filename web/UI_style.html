@@ -575,6 +575,21 @@ body.gon .route,body.gon .agent-note{display:none;}
 .khung-box.nhan-phai span{left:auto;right:-2px;border-radius:0 0 0 5px;}
 .khung-dong.ko-chac{border-style:dashed;}
 .khung-nguon{font-size:12px;color:var(--muted);line-height:1.5;margin:-4px 0 10px;}
+/* Chip loai vat bam duoc (nhom C-8) */
+.chip-lop{cursor:pointer;font-family:inherit;}
+.chip-lop:hover{border-color:var(--vision);}
+.chip-lop.on{border-color:var(--vision);background:color-mix(in srgb,var(--vision) 18%,transparent);color:var(--text);}
+/* ---- Video ngan (nhom C-7) ---- */
+.vd-bieu{width:100%;height:auto;display:block;}
+.vd-tt{font-size:13px;color:var(--text-2);line-height:1.55;margin:8px 0 10px;white-space:pre-line;}
+.vd-ds{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;}
+.vd-k{flex:0 0 auto;width:86px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);
+  padding:0;cursor:pointer;font-family:inherit;color:var(--text-2);text-align:left;overflow:hidden;}
+.vd-k img{width:86px;height:56px;object-fit:cover;display:block;}
+.vd-k span{display:block;font-size:11px;padding:3px 6px;}
+.vd-k.on{border-color:var(--vision);color:var(--text);}
+.vd-nhan{font-size:11.5px;color:var(--muted);margin-bottom:6px;}
+.bubble-user .vd-nhan-tin{display:block;margin-top:5px;font-size:12px;color:var(--muted);}
 .khung-dong .tag{font-size:10.5px;color:var(--muted);margin-left:6px;}
 .khung-dong .ten{flex:1;text-align:left;}
 .chip.ko-chac{border-style:dashed;color:var(--muted);}
@@ -1005,7 +1020,7 @@ body.gon .route,body.gon .agent-note{display:none;}
         <button type="button" class="icon-btn" id="btn-attach" title="Đính kèm ảnh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.1a3.7 3.7 0 1 1 5.2 5.2l-9.2 9.1a1.8 1.8 0 1 1-2.6-2.6l8.5-8.4"/></svg>
         </button>
-        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
+        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/bmp,video/mp4,video/webm,video/quicktime" multiple hidden>
         <textarea id="question" rows="1" placeholder="Nhắn cho Supervisor..."></textarea>
         <select id="research-mode" class="mode-select" aria-label="Chế độ tra cứu" title="Chế độ tra cứu của Research Agent">
           <option value="eco">Tiết kiệm</option>
@@ -1588,7 +1603,11 @@ function htmlSoAnh(soAnh) {
   return soAnh ? '<span class="img-no">Ảnh ' + Number(soAnh) + "</span>" : "";
 }
 
-function htmlBubbleUser(noiDung, anhBase64, soAnh, dsAnh, dsSo) {
+function htmlBubbleUser(noiDung, anhBase64, soAnh, dsAnh, dsSo, video) {
+  if (video && video.thumb) {
+    return '<div class="bubble-user">' + escapeHtml(noiDung) + '<img src="data:image/jpeg;base64,' + video.thumb +
+      '" alt="Khung đầu của video"><span class="vd-nhan-tin">▶ Video' + (video.duration ? " " + giayVN(video.duration) : "") + "</span></div>";
+  }
   if (dsAnh && dsAnh.length > 1) {
     return '<div class="bubble-user">' + escapeHtml(noiDung) + '<div class="anh-luoi">' +
       dsAnh.map((b, i) => "<figure>" + (b ? '<img src="data:image/jpeg;base64,' + b + '" alt="Ảnh đã gửi ' + (i + 1) + '">' : "") +
@@ -1678,17 +1697,18 @@ function htmlKhungVatThe(e, anhNguon) {
     const b = d.bbox || [0, 0, 0, 0];
     const x = Math.max(0, b[0] / kt[0] * 100), y = Math.max(0, b[1] / kt[1] * 100);
     const w = Math.min(100 - x, (b[2] - b[0]) / kt[0] * 100), h = Math.min(100 - y, (b[3] - b[1]) / kt[1] * 100);
-    khung += '<button type="button" class="khung-box' + (ko ? " ko-chac" : "") + '" data-khung-pick="' + i + '" aria-label="' +
+    khung += '<button type="button" class="khung-box' + (ko ? " ko-chac" : "") + '" data-khung-pick="' + i + '" data-lop="' + escapeHtml(c) + '" aria-label="' +
       escapeHtml(ten + ", " + pct + (ko ? ", không chắc" : "")) +
       '" style="left:' + x.toFixed(2) + "%;top:" + y.toFixed(2) + "%;width:" + w.toFixed(2) + "%;height:" + h.toFixed(2) +
       "%;animation-delay:" + (i * 180) + 'ms"><span>' + escapeHtml(ten) + (ko ? "?" : "") + "</span></button>";
-    dong += '<button type="button" class="khung-dong' + (ko ? " ko-chac" : "") + '" data-khung-pick="' + i + '"><span class="ten">' +
+    dong += '<button type="button" class="khung-dong' + (ko ? " ko-chac" : "") + '" data-khung-pick="' + i + '" data-lop="' + escapeHtml(c) + '"><span class="ten">' +
       escapeHtml(ten) + (ko ? '<span class="tag">không chắc</span>' : "") +
       '</span><span class="pct">' + pct + "</span></button>";
   });
   let chips = Object.entries(tong)
     .filter(([c]) => chacTheoLop[c])
-    .map(([c]) => '<span class="chip"><b>' + chacTheoLop[c] + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + "</span>").join("");
+    .map(([c]) => '<button type="button" class="chip chip-lop" data-khung-lop="' + escapeHtml(c) + '" title="Làm nổi bật mọi ' +
+      escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + '"><b>' + chacTheoLop[c] + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + "</button>").join("");
   if (soKo) chips += '<span class="chip ko-chac"><b>+' + soKo + "</b> không chắc</span>";
   return '<div class="panel khung" data-khung><h2>Vật thể phát hiện' + (tuGemini ? " · Gemini" : "") + "</h2>" +
     (tuGemini ? '<div class="khung-nguon">"' + escapeHtml(e.detect_target || "") +
@@ -1699,6 +1719,64 @@ function htmlKhungVatThe(e, anhNguon) {
     (soKo ? " · +" + soKo + " không chắc" : "") + " · chạm để làm nổi bật</span></div>" +
     '<div class="chips">' + chips + '</div><div class="khung-ds">' + dong + "</div>" +
     '<button type="button" class="khung-an" data-khung-toggle>Ẩn khung</button></div></div></div>';
+}
+
+/* Video (nhom C-7): bieu do so dem theo thoi gian + day khung; bam khung de xem khung
+   vat the cua khung do (dung lai htmlKhungVatThe). Du lieu de theo id trong VIDEO_DATA. */
+const VIDEO_DATA = {};
+let demVideo = 0;
+const MAU_LOP = ["#f0a952", "#5b8def", "#3ecf8e", "#e5484d", "#a78bfa", "#00c7be"];
+
+function htmlKhungMotKhung(v, i) {
+  const f = v.frames[i];
+  const src = v.thumbs && v.thumbs[i] ? "data:image/jpeg;base64," + v.thumbs[i] : "";
+  const khung = htmlKhungVatThe({ detections: f.detections, image_size: v.image_size, ten_viet: v.ten_viet }, src);
+  return '<div class="vd-nhan">Khung lúc ' + giayVN(f.t) + "</div>" + (khung ||
+    (src ? '<img src="' + src + '" alt="Khung lúc ' + giayVN(f.t) + '" style="max-width:100%;border-radius:10px">' : "") +
+    '<div class="vd-nhan">Không phát hiện vật nào ở khung này.</div>');
+}
+
+function htmlVideo(e) {
+  const v = e.video;
+  if (!v || !v.frames || !v.frames.length) return "";
+  const id = "vd" + (++demVideo);
+  VIDEO_DATA[id] = v;
+  const n = v.frames.length;
+  const lop = Object.keys(v.classes || {});
+  const W = 600, H = 170, L = 30, R = 12, T = 12, B = 26;
+  const maxY = Math.max(1, ...lop.map((c) => v.classes[c].max));
+  const x = (i) => L + (n === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (n - 1));
+  const y = (k) => H - B - (k * (H - T - B)) / maxY;
+  const buoc = Math.max(1, Math.ceil(maxY / 4));
+  let svg = "";
+  for (let k = 0; k <= maxY; k += buoc) {
+    svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(k) + '" y2="' + y(k) + '" stroke="currentColor" stroke-opacity=".12"/>' +
+      '<text x="' + (L - 6) + '" y="' + (y(k) + 4) + '" text-anchor="end" font-size="11" fill="currentColor" fill-opacity=".6">' + k + "</text>";
+  }
+  v.frames.forEach((f, i) => {
+    svg += '<text x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity=".6">' + giayVN(f.t) + "</text>";
+  });
+  lop.forEach((c, j) => {
+    const mau = MAU_LOP[j % MAU_LOP.length];
+    const dem = v.classes[c].counts;
+    svg += '<polyline fill="none" stroke="' + mau + '" stroke-width="2.4" points="' + dem.map((k, i) => x(i) + "," + y(k)).join(" ") + '"/>' +
+      dem.map((k, i) => '<circle cx="' + x(i) + '" cy="' + y(k) + '" r="3.6" fill="' + mau + '"><title>' +
+        escapeHtml(tenVatThe(c, v.ten_viet)) + " " + k + " lúc " + giayVN(v.frames[i].t) + "</title></circle>").join("");
+  });
+  const chuGiai = lop.map((c, j) => '<span class="chip"><b style="color:' + MAU_LOP[j % MAU_LOP.length] + '">●</b> ' +
+    escapeHtml(tenVatThe(c, v.ten_viet).toLowerCase()) + " · nhiều nhất " + v.classes[c].max + "</span>").join("");
+  const tong = (f) => Object.values(f.counting || {}).reduce((a, b) => a + b, 0);
+  let tot = 0;
+  v.frames.forEach((f, i) => { if (tong(f) > tong(v.frames[tot])) tot = i; });
+  const day = v.frames.map((f, i) => '<button type="button" class="vd-k' + (i === tot ? " on" : "") + '" data-vd-khung="' + i + '">' +
+    (v.thumbs && v.thumbs[i] ? '<img src="data:image/jpeg;base64,' + v.thumbs[i] + '" alt="">' : "") +
+    "<span>" + giayVN(f.t) + " · " + tong(f) + " vật</span></button>").join("");
+  return '<div class="panel" data-video="' + id + '"><h2>Video ' + (v.duration ? giayVN(v.duration) + " " : "") + "· đếm theo thời gian (" + n + " khung)</h2>" +
+    (lop.length ? '<svg class="vd-bieu" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Số vật thể theo thời gian">' + svg + "</svg>" +
+      '<div class="chips">' + chuGiai + "</div>" : "") +
+    '<div class="vd-tt">' + escapeHtml(v.summary || "") + "</div>" +
+    '<div class="vd-ds">' + day + '</div><div data-vd-xem>' + htmlKhungMotKhung(v, tot) + "</div>" +
+    '<div class="vd-nhan">Đếm theo từng khung hình (khoảng 1 khung/giây), không theo dõi từng cá thể: "nhiều nhất N" là số cùng lúc.</div></div>';
 }
 
 /* Nhãn nào tràn ra ngoài mép phải ảnh thì neo sang góc phải của khung (chạy sau khi đã có layout). */
@@ -1757,6 +1835,7 @@ function htmlTraLoi(answer, extras, anhNguon) {
     '</div><div class="tom-tat" aria-live="polite"></div></div>';
 
   html += htmlSoSanh(e);
+  html += htmlVideo(e);
   const khungVatThe = htmlKhungVatThe(e, anhNguon);
   if (khungVatThe) html += khungVatThe;
   if (!khungVatThe && e.counting && Object.keys(e.counting).length) {
@@ -1783,7 +1862,8 @@ function renderTinNhan(messages) {
       turn = document.createElement("div");
       turn.className = "turn";
       const ex = m.extras || {};
-      turn.innerHTML = htmlBubbleUser(m.content, ex.image_thumb_base64, ex.image_no, ex.image_thumbs_base64, ex.image_nos);
+      turn.innerHTML = htmlBubbleUser(m.content, ex.image_thumb_base64, ex.image_no, ex.image_thumbs_base64, ex.image_nos,
+        ex.video_thumb_base64 ? { thumb: ex.video_thumb_base64, duration: ex.video_duration } : null);
       /* Khung YOLO chi ve len anh khi tin nhan co MOT anh. */
       if (ex.image_thumb_base64 && !(ex.image_nos && ex.image_nos.length > 1)) turn.dataset.thumb = ex.image_thumb_base64;
       thread.appendChild(turn);
@@ -1967,11 +2047,11 @@ function chayCho(cho, coAnh) {
   return () => clearInterval(id);
 }
 
-async function gui(cauHoi, dsFile) {
+async function gui(cauHoi, dsFile, video) {
   if (state.sending) return;
-  /* dsFile: mang anh (0-5). Goi kieu cu gui(q, file) van chay. */
+  /* dsFile: mang anh (0-5). Goi kieu cu gui(q, file) van chay. video: xem tachKhungVideo. */
   dsFile = Array.isArray(dsFile) ? dsFile : (dsFile ? [dsFile] : []);
-  const file = dsFile[0] || null;
+  const file = dsFile[0] || (video ? video.frames[0] : null);
   state.sending = true;
   state.boDung = new AbortController();
   capNhatNutGui();
@@ -1980,12 +2060,14 @@ async function gui(cauHoi, dsFile) {
   const thread = $("thread");
   const turn = document.createElement("div");
   turn.className = "turn";
-  const dsAnhTam = dsFile.map((f) => URL.createObjectURL(f));
-  const anhTam = dsAnhTam.length === 1 ? dsAnhTam[0] : null;
+  const dsAnhTam = video ? [video.poster] : dsFile.map((f) => URL.createObjectURL(f));
+  const anhTam = dsAnhTam.length === 1 && !video ? dsAnhTam[0] : null;
   turn.innerHTML =
     '<div class="bubble-user">' + escapeHtml(cauHoi) +
-    (dsAnhTam.length === 1 ? '<img src="' + anhTam + '" alt="Ảnh đã gửi">' : "") +
-    (dsAnhTam.length > 1 ? '<div class="anh-luoi">' + dsAnhTam.map((u, i) =>
+    (video ? '<img src="' + video.poster + '" alt="Khung đầu của video"><span class="vd-nhan-tin">▶ Video ' +
+      giayVN(video.duration) + " · " + video.frames.length + " khung</span>" : "") +
+    (anhTam ? '<img src="' + anhTam + '" alt="Ảnh đã gửi">' : "") +
+    (dsAnhTam.length > 1 && !video ? '<div class="anh-luoi">' + dsAnhTam.map((u, i) =>
       '<figure><img src="' + u + '" alt="Ảnh đã gửi ' + (i + 1) + '"></figure>').join("") + "</div>" : "") + "</div>" +
     (laCauHoiResearch(cauHoi, file) ? htmlChoResearch() : htmlCho(dsAnhTam[0] || null));
   thread.appendChild(turn);
@@ -1999,7 +2081,11 @@ async function gui(cauHoi, dsFile) {
   body.append("user_id", state.userId);
   if (state.currentId) body.append("conversation_id", state.currentId);
   else if (state.projectMoi) body.append("project_id", state.projectMoi);
-  if (dsFile.length === 1) body.append("file", dsFile[0]);
+  if (video) {
+    video.frames.forEach((f) => body.append("video_frames", f));
+    body.append("video_times", JSON.stringify(video.times));
+    body.append("video_duration", String(video.duration));
+  } else if (dsFile.length === 1) body.append("file", dsFile[0]);
   else dsFile.forEach((f) => body.append("files", f));
   const cheDo = $("research-mode");
   if (!cheDo.disabled) body.append("research_mode", cheDo.value);
@@ -2041,7 +2127,7 @@ async function gui(cauHoi, dsFile) {
       nut.type = "button";
       nut.className = "thu-lai";
       nut.textContent = "Thử lại";
-      nut.onclick = () => { turn.remove(); gui(cauHoi, dsFile); };
+      nut.onclick = () => { turn.remove(); gui(cauHoi, dsFile, video); };
       hop.appendChild(nut);
       dots.replaceWith(hop);
     }
@@ -2101,7 +2187,12 @@ const CHIP_NHIEU_ANH = [
   { nhan: "Ảnh nào nhiều vật hơn?", q: "Đếm vật thể trong từng ảnh và cho biết ảnh nào nhiều hơn.", icon: "M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M9 9h6v6H9z" },
   { nhan: "Có phải cùng loài/vật?", q: "Các ảnh này có phải cùng một loài (hoặc cùng một vật) không? Nêu điểm phân biệt.", icon: "M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z" },
 ];
-function chipDangDung() { return dsFileDinhKem.length > 1 ? CHIP_NHIEU_ANH : CHIP_ANH; }
+const CHIP_VIDEO = [
+  { nhan: "Tóm tắt video", q: "Video này có gì? Tóm tắt diễn biến.", icon: "M23 7l-7 5 7 5V7zM1 5h15v14H1z" },
+  { nhan: "Đếm theo thời gian", q: "Đếm vật thể trong video theo thời gian: lúc nào nhiều nhất?", icon: "M3 3v18h18M7 15l4-4 3 3 5-6" },
+  { nhan: "Có mấy người?", q: "Trong video có nhiều nhất bao nhiêu người cùng lúc, vào lúc nào?", icon: "M16 21v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
+];
+function chipDangDung() { return videoDinhKem ? CHIP_VIDEO : dsFileDinhKem.length > 1 ? CHIP_NHIEU_ANH : CHIP_ANH; }
 function veChipAnh() {
   $("chips-anh").innerHTML = chipDangDung().map((c, i) =>
     '<button type="button" class="chip-nhanh" data-chip="' + i + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
@@ -2247,9 +2338,16 @@ let dsFileDinhKem = [];
 let fileDinhKem = null;
 
 function veFileDinhKem() {
-  fileDinhKem = dsFileDinhKem[0] || null;
+  fileDinhKem = dsFileDinhKem[0] || (videoDinhKem ? videoDinhKem.frames[0] : null);
   const chip = $("filechip");
   $("file-input").value = "";
+  if (videoDinhKem) {
+    $("filechip-ds").innerHTML = '<div class="fc-o"><img src="' + videoDinhKem.poster + '" alt="Khung đầu của video"><span class="fc-so">▶</span></div>';
+    $("filechip-name").textContent = "Video " + giayVN(videoDinhKem.duration) + " · " + videoDinhKem.frames.length + " khung";
+    chip.classList.add("show");
+    capNhatNutGui(); veChipAnh(); capNhatChipAnh();
+    return;
+  }
   if (!dsFileDinhKem.length) {
     chip.classList.remove("show");
     capNhatNutGui(); capNhatChipAnh(); veChipAnh();
@@ -2270,9 +2368,73 @@ function veFileDinhKem() {
   capNhatChipAnh();
 }
 
-/* Them anh (chon file, dan, keo tha): noi vao danh sach, khong thay the. */
+/* ===== Video ngan (nhom C-7): TRINH DUYET tach khung, server chi dem bang YOLO =====
+   Khong giai ma video tren server: repo khong co thu vien video va Render Free chi co
+   512MB RAM. Video <= 10 giay, lay ~1 khung/giay, toi da 8 khung. */
+const VIDEO_TOI_DA_GIAY = 10;
+const VIDEO_TOI_DA_KHUNG = 8;
+let videoDinhKem = null; // {ten, frames: [File], times: [giay], duration, poster: url}
+
+function choSuKien(el, ev) {
+  return new Promise((ok, loi) => {
+    el.addEventListener(ev, ok, { once: true });
+    el.addEventListener("error", () => loi(new Error("Trình duyệt không đọc được video này (thử file .mp4 H.264).")), { once: true });
+  });
+}
+
+async function tachKhungVideo(file) {
+  const v = document.createElement("video");
+  v.muted = true; v.preload = "auto"; v.playsInline = true;
+  v.src = URL.createObjectURL(file);
+  await choSuKien(v, "loadedmetadata");
+  const dai = v.duration;
+  if (!isFinite(dai) || dai <= 0) throw new Error("Không đọc được độ dài video.");
+  if (dai > VIDEO_TOI_DA_GIAY + 0.5) throw new Error("Video dài " + dai.toFixed(1) + " giây; tối đa " + VIDEO_TOI_DA_GIAY + " giây. Hãy cắt ngắn rồi gửi lại.");
+  /* ~1 khung/giay; video dai hon 7 giay thi rai deu 8 khung. */
+  const n = Math.min(VIDEO_TOI_DA_KHUNG, Math.floor(dai) + 1);
+  const cuoi = Math.max(0, dai - 0.1);
+  const moc = n === 1 ? [0] : Array.from({ length: n }, (_, i) => Math.min(cuoi, n <= dai ? i : (i * cuoi) / (n - 1)));
+  const canh = 960;
+  const tl = Math.min(1, canh / Math.max(v.videoWidth, v.videoHeight));
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(v.videoWidth * tl); cv.height = Math.round(v.videoHeight * tl);
+  const ctx = cv.getContext("2d");
+  const frames = [];
+  for (let i = 0; i < moc.length; i++) {
+    v.currentTime = Math.max(0.001, moc[i]);
+    await choSuKien(v, "seeked");
+    ctx.drawImage(v, 0, 0, cv.width, cv.height);
+    const blob = await new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.85));
+    frames.push(new File([blob], "khung_" + i + ".jpg", { type: "image/jpeg" }));
+  }
+  URL.revokeObjectURL(v.src);
+  return { ten: file.name, frames, times: moc.map((t) => Math.round(t * 100) / 100), duration: Math.round(dai * 100) / 100, poster: URL.createObjectURL(frames[0]) };
+}
+
+async function datVideo(file) {
+  dsFileDinhKem = [];
+  videoDinhKem = null;
+  $("filechip-ds").innerHTML = "";
+  $("filechip-name").textContent = "Đang tách khung hình…";
+  $("filechip").classList.add("show");
+  try {
+    videoDinhKem = await tachKhungVideo(file);
+  } catch (e) {
+    toast(e.message || "Không đọc được video.");
+  }
+  veFileDinhKem();
+}
+
+const giayVN = (t) => String(Math.round(t * 10) / 10).replace(".", ",") + "s";
+
+/* Them anh (chon file, dan, keo tha): noi vao danh sach, khong thay the.
+   Co video trong lua chon -> chuyen sang che do video (mot video mot tin nhan). */
 function themFile(ds) {
-  const anh = [...(ds || [])].filter((f) => f && (f.type || "").startsWith("image/"));
+  const tatCa = [...(ds || [])];
+  const vd = tatCa.find((f) => f && (f.type || "").startsWith("video/"));
+  if (vd) { if (tatCa.length > 1) toast("Mỗi tin nhắn gửi một video; các ảnh đi kèm được bỏ qua."); datVideo(vd); return; }
+  if (videoDinhKem) { videoDinhKem = null; }
+  const anh = tatCa.filter((f) => f && (f.type || "").startsWith("image/"));
   if (!anh.length) return;
   const conCho = SO_ANH_MOI_TIN - dsFileDinhKem.length;
   if (conCho <= 0) { toast("Tối đa " + SO_ANH_MOI_TIN + " ảnh trong một tin nhắn."); return; }
@@ -2281,9 +2443,10 @@ function themFile(ds) {
   veFileDinhKem();
 }
 
-/* Giu ten cu: datFile(null) = bo het; datFile(f) = chi mot anh nay. */
+/* Giu ten cu: datFile(null) = bo het (ca video); datFile(f) = chi mot anh nay. */
 function datFile(f) {
   dsFileDinhKem = f ? [f] : [];
+  videoDinhKem = null;
   veFileDinhKem();
 }
 
@@ -2408,6 +2571,19 @@ function ganSuKien() {
     if (lai) { hoiVeAnh(lai.dataset.tvLai); $("file-input").click(); }
   });
 
+  /* --- video: bam mot khung trong day -> xem khung vat the cua khung do --- */
+  $("thread").addEventListener("click", (e) => {
+    const k = e.target.closest("[data-vd-khung]");
+    if (!k) return;
+    const hop = k.closest("[data-video]");
+    const v = VIDEO_DATA[hop && hop.dataset.video];
+    if (!v) return;
+    hop.querySelectorAll("[data-vd-khung]").forEach((b) => b.classList.toggle("on", b === k));
+    const xem = hop.querySelector("[data-vd-xem]");
+    xem.innerHTML = htmlKhungMotKhung(v, Number(k.dataset.vdKhung));
+    canhNhanKhung(xem);
+  });
+
   /* --- khung vat the: bam khung / dong de lam noi bat, nut An/Hien khung --- */
   $("thread").addEventListener("click", (e) => {
     const panel = e.target.closest("[data-khung]");
@@ -2417,10 +2593,25 @@ function ganSuKien() {
       nutAn.textContent = panel.classList.toggle("an-khung") ? "Hiện khung" : "Ẩn khung";
       return;
     }
+    /* Bam chip loai vat ("2 cho") -> lam noi bat MOI khung loai do, bam lai de bo. */
+    const chipLop = e.target.closest("[data-khung-lop]");
+    if (chipLop) {
+      const lop = panel.dataset.lop === chipLop.dataset.khungLop ? "" : chipLop.dataset.khungLop;
+      panel.dataset.lop = lop;
+      panel.dataset.chon = "";
+      panel.querySelectorAll("[data-khung-lop]").forEach((el) => el.classList.toggle("on", lop !== "" && el.dataset.khungLop === lop));
+      panel.querySelectorAll("[data-khung-pick]").forEach((el) => {
+        el.classList.toggle("chon", lop !== "" && el.dataset.lop === lop);
+        el.classList.toggle("mo", lop !== "" && el.dataset.lop !== lop);
+      });
+      return;
+    }
     const pick = e.target.closest("[data-khung-pick]");
     if (!pick) return;
     const moi = panel.dataset.chon === pick.dataset.khungPick ? "" : pick.dataset.khungPick;
     panel.dataset.chon = moi;
+    panel.dataset.lop = "";
+    panel.querySelectorAll("[data-khung-lop]").forEach((el) => el.classList.remove("on"));
     panel.querySelectorAll("[data-khung-pick]").forEach((el) => {
       el.classList.toggle("chon", moi !== "" && el.dataset.khungPick === moi);
       el.classList.toggle("mo", moi !== "" && el.dataset.khungPick !== moi);
@@ -2526,10 +2717,11 @@ function ganSuKien() {
     const q = ta.value.trim();
     if (!q) return;
     const f = dsFileDinhKem.slice();
+    const vd = videoDinhKem;
     ta.value = "";
     tuGianTextarea();
     datFile(null);
-    gui(q, f);
+    gui(q, f, vd);
   });
 
   /* --- keo tha anh vao o nhap --- */

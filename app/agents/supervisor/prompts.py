@@ -60,7 +60,7 @@ RULES:
   * If the user only asked to read or describe the image, answer from
     vision_agent_tool alone and do not call research_agent_tool.
 - VIDEO: the user message may contain a [VIDEO] block: per-frame object counts from
-  the detector for a short video (about one frame per second), plus a few
+  the detector for a short video (up to 8 frames spread evenly), plus a few
   "Video keyframes: IMG901 (t=0s) ..." ids.
   * Answer counting / timing questions ("có mấy người", "lúc nào xuất hiện",
     "tăng hay giảm") directly from the block, mentioning times. Counts are PER

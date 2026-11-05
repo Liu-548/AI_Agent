@@ -5,7 +5,7 @@ Lời hứa:
     có mặt bao nhiêu khung, tăng/giảm. Câu hỏi nêu loại vật thì chỉ giữ loại đó.
   - Supervisor nhận khối [VIDEO] (đếm theo KHUNG, không phải cá thể) và mã khung chính.
   - Câu hỏi cần "nhìn" -> MỘT lượt model xem các khung chính như một cảnh.
-  - Giới hạn: tối đa 8 khung, video tối đa 10 giây.
+  - Giới hạn: tối đa 8 khung, video tối đa 30 giây.
 Không cần mạng/API key: YOLO và model đều giả.
 """
 
@@ -66,7 +66,7 @@ def test_khong_thay_gi():
 def test_khoi_cho_supervisor_noi_ro_dem_theo_khung():
     ket = phan_tich_khung_hinh(["a", "b"], [0, 1.5], "", detector=_detector_theo_thu_tu())
     khoi = khoi_cho_supervisor(ket, 2.0)
-    assert khoi.startswith("[VIDEO] 2s video, 2 frames") and khoi.endswith("[END VIDEO]")
+    assert khoi.startswith("[VIDEO] 2s video, 2 frames sampled evenly") and khoi.endswith("[END VIDEO]")
     assert "t=0s: chó 1" in khoi and "t=1,5s: chó 2, người 1" in khoi
     assert "PER FRAME" in khoi
 
@@ -102,7 +102,16 @@ def test_api_video_tra_dong_thoi_gian(he, monkeypatch):  # noqa: F811
 
 def test_api_video_qua_dai_hoac_qua_nhieu_khung(he):  # noqa: F811
     assert _gui_video(he, so_khung=9).status_code == 400
-    assert _gui_video(he, so_khung=3, thoi_luong=30).status_code == 400
+    assert _gui_video(he, so_khung=3, thoi_luong=45).status_code == 400
+
+
+def test_api_video_12_giay_duoc_nhan(he, monkeypatch):  # noqa: F811
+    monkeypatch.setattr("app.agents.vision_agent.tools.default_detector", _detector_theo_thu_tu())
+    he.model.kich_ban(AIMessage(content="Ok."))
+    r = _gui_video(he, so_khung=8, thoi_luong=12.0)
+    assert r.status_code == 200, r.text
+    assert r.json()["video"]["duration"] == 12.0
+    assert "about one every 1,5s" in he.model.tin_nguoi_dung_cuoi
 
 
 def test_xem_khung_video_mot_luot(monkeypatch, tmp_path):

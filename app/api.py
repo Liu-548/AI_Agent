@@ -1085,10 +1085,10 @@ def ask_supervisor(
         None, description=f"Nhieu anh trong MOT tin nhan (vd de so sanh), toi da {SO_ANH_MOI_LUOT_TOI_DA}"
     ),
     video_frames: List[UploadFile] = File(
-        None, description="Khung hinh cua video ngan, TRINH DUYET da tach san (~1 khung/giay, toi da 8)"
+        None, description="Khung hinh cua video ngan, TRINH DUYET da tach san (toi da 8, rai deu)"
     ),
     video_times: str = Form("", description='Thoi diem (giay) cua tung khung, JSON vd "[0,1,2]"'),
-    video_duration: float = Form(0.0, description="Do dai video (giay), toi da 10"),
+    video_duration: float = Form(0.0, description="Do dai video (giay), toi da 30"),
     authorization: Optional[str] = Header(None),
 ):
     """Di qua Supervisor, co nho ngu canh cua chinh hoi thoai do.

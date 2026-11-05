@@ -1776,7 +1776,7 @@ function htmlVideo(e) {
       '<div class="chips">' + chuGiai + "</div>" : "") +
     '<div class="vd-tt">' + escapeHtml(v.summary || "") + "</div>" +
     '<div class="vd-ds">' + day + '</div><div data-vd-xem>' + htmlKhungMotKhung(v, tot) + "</div>" +
-    '<div class="vd-nhan">Đếm theo từng khung hình (khoảng 1 khung/giây), không theo dõi từng cá thể: "nhiều nhất N" là số cùng lúc.</div></div>';
+    '<div class="vd-nhan">Đếm theo từng khung hình (khoảng ' + giayVN((v.duration || n) / n) + ' một khung), không theo dõi từng cá thể: "nhiều nhất N" là số cùng lúc; vật xuất hiện chớp nhoáng giữa hai khung có thể bị sót.</div></div>';
 }
 
 /* Nhãn nào tràn ra ngoài mép phải ảnh thì neo sang góc phải của khung (chạy sau khi đã có layout). */
@@ -2370,8 +2370,8 @@ function veFileDinhKem() {
 
 /* ===== Video ngan (nhom C-7): TRINH DUYET tach khung, server chi dem bang YOLO =====
    Khong giai ma video tren server: repo khong co thu vien video va Render Free chi co
-   512MB RAM. Video <= 10 giay, lay ~1 khung/giay, toi da 8 khung. */
-const VIDEO_TOI_DA_GIAY = 10;
+   512MB RAM. Video <= 30 giay, toi da 8 khung rai deu (~1 khung/giay neu video ngan). */
+const VIDEO_TOI_DA_GIAY = 30;
 const VIDEO_TOI_DA_KHUNG = 8;
 let videoDinhKem = null; // {ten, frames: [File], times: [giay], duration, poster: url}
 
@@ -2390,10 +2390,12 @@ async function tachKhungVideo(file) {
   const dai = v.duration;
   if (!isFinite(dai) || dai <= 0) throw new Error("Không đọc được độ dài video.");
   if (dai > VIDEO_TOI_DA_GIAY + 0.5) throw new Error("Video dài " + dai.toFixed(1) + " giây; tối đa " + VIDEO_TOI_DA_GIAY + " giây. Hãy cắt ngắn rồi gửi lại.");
-  /* ~1 khung/giay; video dai hon 7 giay thi rai deu 8 khung. */
+  /* Video ngan (du cho 1 khung/giay trong 8 khung): moi giay mot khung. Dai hon: rai
+     deu 8 khung tren CA video (30 giay -> khoang 4 giay mot khung). */
+  const motGiayMotKhung = Math.floor(dai) + 1 <= VIDEO_TOI_DA_KHUNG;
   const n = Math.min(VIDEO_TOI_DA_KHUNG, Math.floor(dai) + 1);
   const cuoi = Math.max(0, dai - 0.1);
-  const moc = n === 1 ? [0] : Array.from({ length: n }, (_, i) => Math.min(cuoi, n <= dai ? i : (i * cuoi) / (n - 1)));
+  const moc = n === 1 ? [0] : Array.from({ length: n }, (_, i) => Math.min(cuoi, motGiayMotKhung ? i : (i * cuoi) / (n - 1)));
   const canh = 960;
   const tl = Math.min(1, canh / Math.max(v.videoWidth, v.videoHeight));
   const cv = document.createElement("canvas");

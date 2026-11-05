@@ -1,6 +1,7 @@
 """Nhóm C-7: phân tích video ngắn bằng cách đếm vật thể trên từng khung hình.
 
-Khung hình được TRÌNH DUYỆT tách sẵn (thẻ <video> + canvas, khoảng 1 khung/giây) rồi
+Khung hình được TRÌNH DUYỆT tách sẵn (thẻ <video> + canvas, tối đa 8 khung rải đều;
+video tới 30 giây nên khung có thể cách nhau tới ~4 giây) rồi
 gửi lên như các ảnh JPEG nhỏ. Lý do không giải mã video trên server:
   - repo chưa có thư viện đọc video (opencv/ffmpeg), thêm vào là đổi bộ phụ thuộc đã
     khoá của nhóm (QUY_TAC_THIET_KE.md, MT-03) và nặng thêm vài chục MB;
@@ -21,7 +22,7 @@ from typing import Callable, Dict, List, Optional
 from app.agents.vision_agent.labels import loc_theo_lop, lop_tu_cau_hoi, ten_viet
 
 SO_KHUNG_TOI_DA = 8
-THOI_LUONG_TOI_DA = 10.0  # giây
+THOI_LUONG_TOI_DA = 30.0  # giây. Luôn tối đa 8 khung: video dài thì khung thưa hơn.
 
 
 def _giay(t: float) -> str:
@@ -97,8 +98,10 @@ def tom_tat(frames: List[dict], lop: Dict[str, dict]) -> str:
 def khoi_cho_supervisor(ket: dict, thoi_luong: float) -> str:
     """Khối chữ gửi kèm câu hỏi: số đếm từng khung + tóm tắt + cách diễn giải đúng."""
     frames = ket["frames"]
+    cach = thoi_luong / max(1, len(frames))
     dong = [
-        f"[VIDEO] {_giay(thoi_luong)} video, {len(frames)} frames sampled about once per second. "
+        f"[VIDEO] {_giay(thoi_luong)} video, {len(frames)} frames sampled evenly "
+        f"(about one every {_giay(cach)}; anything shorter than that may be missed). "
         "Object counts by the detector (YOLO) in EACH frame:"
     ]
     for f in frames:

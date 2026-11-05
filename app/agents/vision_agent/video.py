@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional
 
-from app.agents.vision_agent.labels import loc_theo_lop, lop_tu_cau_hoi, ten_viet
+from app.agents.vision_agent.labels import NHOM_KHAC, NHOM_VAT, loc_theo_lop, lop_tu_cau_hoi, nhom_cua, ten_viet
 
 SO_KHUNG_TOI_DA = 8
 THOI_LUONG_TOI_DA = 30.0  # giây. Luôn tối đa 8 khung: video dài thì khung thưa hơn.
@@ -64,15 +64,43 @@ def phan_tich_khung_hinh(
             "first": co_mat[0],
             "last": co_mat[-1],
         }
+    nhom = tong_nhom_theo_khung(frames)
     return {
         "frames": frames,
         "classes": lop,
+        "groups": nhom,
         "filtered_by": sorted(loai),
-        "summary": tom_tat(frames, lop),
+        "summary": tom_tat(frames, lop, nhom),
     }
 
 
-def tom_tat(frames: List[dict], lop: Dict[str, dict]) -> str:
+def tong_nhom_theo_khung(frames: List[dict]) -> Dict[str, dict]:
+    """Mỗi nhóm (người / phương tiện / động vật / khác): tổng từng khung, nhiều nhất lúc nào.
+
+    "Tổng" ở đây là tổng số vật của nhóm TRONG MỘT KHUNG (vd 4 xe máy + 3 ô tô = 7
+    phương tiện cùng lúc), không phải số cá thể khác nhau trong cả video.
+    """
+    ten_nhom = {m: v[0] for m, v in NHOM_VAT.items()}
+    ten_nhom[NHOM_KHAC[0]] = NHOM_KHAC[1]
+    ra: Dict[str, dict] = {}
+    for ma, ten in ten_nhom.items():
+        tong = [sum(k for c, k in f["counting"].items() if nhom_cua(c) == ma) for f in frames]
+        if not any(tong):
+            continue
+        cao = max(tong)
+        i = tong.index(cao)
+        ra[ma] = {
+            "ten": ten,
+            "counts": tong,
+            "max": cao,
+            "max_at": [f["t"] for f, k in zip(frames, tong) if k == cao],
+            # thành phần của nhóm ở khung đông nhất (vd xe máy 4, ô tô 3)
+            "chi_tiet_luc_max": {c: k for c, k in frames[i]["counting"].items() if nhom_cua(c) == ma},
+        }
+    return ra
+
+
+def tom_tat(frames: List[dict], lop: Dict[str, dict], nhom: Optional[Dict[str, dict]] = None) -> str:
     """Tóm tắt bằng chữ, tiếng Việt, xác định (không gọi model)."""
     if not frames:
         return "Không có khung hình nào."
@@ -80,6 +108,12 @@ def tom_tat(frames: List[dict], lop: Dict[str, dict]) -> str:
     if not lop:
         return f"YOLO không phát hiện vật thể nào trong {n} khung hình."
     dong = []
+    if nhom:
+        phan = []
+        for v in nhom.values():
+            ct = ", ".join(f"{k} {ten_viet(c)}" for c, k in sorted(v["chi_tiet_luc_max"].items(), key=lambda x: -x[1]))
+            phan.append(f"{v['ten']} {v['max']}" + (f" ({ct})" if len(v["chi_tiet_luc_max"]) > 1 else ""))
+        dong.append("Theo nhóm, nhiều nhất cùng lúc: " + "; ".join(phan) + ".")
     for c, v in sorted(lop.items(), key=lambda kv: -kv[1]["max"]):
         luc = ", ".join(_giay(t) for t in v["max_at"][:3])
         if v["frames_present"] == n:
@@ -106,7 +140,12 @@ def khoi_cho_supervisor(ket: dict, thoi_luong: float) -> str:
     ]
     for f in frames:
         ta = ", ".join(f"{ten_viet(c)} {k}" for c, k in f["counting"].items()) or "không có gì"
-        dong.append(f"t={_giay(f['t'])}: {ta}")
+        nhom = {}
+        for c, k in f["counting"].items():
+            nhom[nhom_cua(c)] = nhom.get(nhom_cua(c), 0) + k
+        ten = {m: v[0] for m, v in NHOM_VAT.items()} | {NHOM_KHAC[0]: NHOM_KHAC[1]}
+        tong = ", ".join(f"{ten[m]} {k}" for m, k in nhom.items())
+        dong.append(f"t={_giay(f['t'])}: {ta}" + (f" | theo nhóm: {tong}" if tong else ""))
     dong += [
         "Summary (Vietnamese):",
         ket["summary"],

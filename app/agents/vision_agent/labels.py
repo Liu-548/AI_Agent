@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Dict, FrozenSet, Iterable, Iterator, Optional
+from typing import Dict, FrozenSet, Iterable, Iterator, List, Optional
 
 from app.agents.vision_agent.topics import khong_dau
 
@@ -305,3 +305,43 @@ def lop_dang_loc() -> FrozenSet[str]:
     """Các lớp cần giữ cho lượt hiện tại; rỗng nếu không có câu hỏi hay không nêu loại."""
     cau_hoi = _CAU_HOI_HIEN_TAI.get()
     return lop_tu_cau_hoi(cau_hoi) if cau_hoi else frozenset()
+
+
+# --------------------------------------------------------------------------- #
+# Gom theo NHÓM: người / phương tiện / động vật / khác
+# --------------------------------------------------------------------------- #
+# Người dùng hay hỏi "tổng cộng bao nhiêu người, bao nhiêu xe, bao nhiêu con vật",
+# không phải từng lớp COCO. Thứ tự ở đây là thứ tự in ra.
+NHOM_VAT: Dict[str, tuple] = {
+    "nguoi": ("Người", ("person",)),
+    "phuong_tien": (
+        "Phương tiện",
+        ("bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"),
+    ),
+    "dong_vat": (
+        "Động vật",
+        ("bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"),
+    ),
+}
+NHOM_KHAC = ("khac", "Đồ vật khác")
+
+
+def nhom_cua(lop: str) -> str:
+    """Mã nhóm của một lớp COCO: nguoi / phuong_tien / dong_vat / khac."""
+    for ma, (_ten, cac_lop) in NHOM_VAT.items():
+        if lop in cac_lop:
+            return ma
+    return NHOM_KHAC[0]
+
+
+def tong_theo_nhom(counting: Dict[str, int]) -> List[dict]:
+    """{"person": 9, "car": 3, "motorcycle": 4} -> [{"nhom", "ten", "tong", "chi_tiet"}, ...].
+
+    Chỉ trả nhóm có ít nhất một vật, đúng thứ tự Người, Phương tiện, Động vật, Khác.
+    """
+    ra = []
+    for ma, ten in [(m, v[0]) for m, v in NHOM_VAT.items()] + [NHOM_KHAC]:
+        chi_tiet = {c: n for c, n in counting.items() if nhom_cua(c) == ma and n}
+        if chi_tiet:
+            ra.append({"nhom": ma, "ten": ten, "tong": sum(chi_tiet.values()), "chi_tiet": chi_tiet})
+    return ra

@@ -209,3 +209,20 @@ def test_loc_van_chay_khi_tool_nam_trong_agent_langgraph_that(anh):
             ra = agent.invoke({"messages": [("user", "x")]})
         dem = [json.loads(m.content)["counting"] for m in ra["messages"] if isinstance(m, ToolMessage)]
         assert dem == [{"cat": 1}] * so_lan
+
+
+# --------------------------- tổng theo nhóm --------------------------------- #
+def test_tong_theo_nhom():
+    from app.agents.vision_agent.labels import nhom_cua, tong_theo_nhom
+
+    assert nhom_cua("person") == "nguoi" and nhom_cua("motorcycle") == "phuong_tien"
+    assert nhom_cua("dog") == "dong_vat" and nhom_cua("handbag") == "khac"
+    ra = tong_theo_nhom({"motorcycle": 4, "person": 9, "car": 3, "handbag": 1, "dog": 0})
+    assert [(g["ten"], g["tong"]) for g in ra] == [("Người", 9), ("Phương tiện", 7), ("Đồ vật khác", 1)]
+    assert ra[1]["chi_tiet"] == {"motorcycle": 4, "car": 3}
+
+
+def test_tool_tra_tong_theo_nhom(anh):
+    det = fake_detector_factory([("person", 0.9, (1, 1, 2, 2)), ("car", 0.9, (1, 1, 2, 2)), ("motorcycle", 0.9, (3, 3, 4, 4))])
+    out = json.loads(make_detect_and_count_tool(detector=det).invoke({"text": anh}))
+    assert out["totals_by_group"] == {"Người": 1, "Phương tiện": 2}

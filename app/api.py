@@ -284,6 +284,7 @@ def _video_cho_ui(ket: dict, duong_dan: List[Path], thoi_luong: float) -> dict:
         "duration": round(float(thoi_luong or 0), 2),
         "frames": ket["frames"],
         "classes": ket["classes"],
+        "groups": ket.get("groups", {}),
         "summary": ket["summary"],
         "image_size": kich_thuoc,
         "thumbs": thumbs,

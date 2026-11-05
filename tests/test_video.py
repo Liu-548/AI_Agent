@@ -154,3 +154,13 @@ def test_phuc_vu_model_cho_trinh_duyet(he):  # noqa: F811
     assert info["ten_viet"]["dog"] == "chó" and info["imgsz"] == 640
     r = he.client.get("/api/model/yolo.onnx")
     assert r.status_code == 200 and len(r.content) > 1_000_000
+
+
+def test_video_tong_theo_nhom():
+    ket = phan_tich_khung_hinh(["a", "b", "c", "d"], [0, 1, 2, 3], "", detector=_detector_theo_thu_tu())
+    g = ket["groups"]
+    assert g["dong_vat"]["max"] == 3 and g["dong_vat"]["max_at"] == [2]
+    assert g["nguoi"]["counts"] == [0, 1, 0, 1]
+    assert ket["summary"].startswith("Theo nhóm, nhiều nhất cùng lúc: Người 1; Động vật 3.")
+    khoi = khoi_cho_supervisor(ket, 4.0)
+    assert "t=1s: chó 2, người 1 | theo nhóm: Động vật 2, Người 1" in khoi

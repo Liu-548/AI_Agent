@@ -595,6 +595,11 @@ body.gon .route,body.gon .agent-note{display:none;}
 .vd-live video{width:100%;max-height:70vh;display:block;border-radius:10px;background:#000;}
 .vd-live canvas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
 .vd-trang{font-size:12.5px;color:var(--text-2);margin-bottom:6px;}
+/* Tong theo nhom: Nguoi 9 · Phuong tien 7 (4 xe may, 3 o to) */
+.nhom-tong{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--text-2);margin:2px 0 8px;width:100%;}
+.nhom-tong b{color:var(--vision);font-size:15px;}
+.nhom-tong i{font-style:normal;color:var(--muted);font-size:12px;}
+.nhom-nhan{width:100%;font-size:11.5px;color:var(--muted);}
 .bubble-user .vd-nhan-tin{display:block;margin-top:5px;font-size:12px;color:var(--muted);}
 .khung-dong .tag{font-size:10.5px;color:var(--muted);margin-left:6px;}
 .khung-dong .ten{flex:1;text-align:left;}
@@ -1674,6 +1679,30 @@ function tenVatThe(c, map) {
 
 /* Anh da gui + khung YOLO ve len bang CSS (toa do pixel -> %), bam vao khung hoac
    dong ben canh de lam noi bat. Can e.detections va e.image_size tu server. */
+/* Nhom de dem tong: nguoi / phuong tien / dong vat / khac (khop NHOM_VAT trong labels.py). */
+const NHOM_VAT = [
+  ["Người", ["person"]],
+  ["Phương tiện", ["bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat"]],
+  ["Động vật", ["bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"]],
+];
+function nhomCua(c) { const g = NHOM_VAT.find(([, ds]) => ds.includes(c)); return g ? g[0] : "Đồ vật khác"; }
+/* {person: 9, car: 3, motorcycle: 4} -> HTML "Người 9 · Phương tiện 7 (4 xe máy, 3 ô tô)" */
+function htmlTongNhom(dem, tenMap) {
+  const nhom = {};
+  Object.entries(dem).forEach(([c, so]) => {
+    if (!so) return;
+    const g = nhomCua(c);
+    (nhom[g] = nhom[g] || { tong: 0, ct: [] }).tong += so;
+    nhom[g].ct.push([c, so]);
+  });
+  const thuTu = NHOM_VAT.map(([g]) => g).concat(["Đồ vật khác"]).filter((g) => nhom[g]);
+  if (!thuTu.length) return "";
+  return '<div class="nhom-tong">' + thuTu.map((g) => {
+    const ct = nhom[g].ct.sort((a, b) => b[1] - a[1]);
+    return "<span>" + g + " <b>" + nhom[g].tong + "</b>" + (ct.length > 1 ? ' <i>(' + ct.map(([c, so]) => so + " " +
+      escapeHtml(tenVatThe(c, tenMap).toLowerCase())).join(", ") + ")</i>" : "") + "</span>";
+  }).join("") + "</div>";
+}
 const NGUONG_CHAC = 0.5;   // dưới mức này YOLO "không chắc" (khớp NGUONG_CHAC trong tools.py)
 function htmlKhungVatThe(e, anhNguon) {
   const ds = e.detections || [];
@@ -1723,6 +1752,7 @@ function htmlKhungVatThe(e, anhNguon) {
     '<div class="khung-anh"><img src="' + anhNguon + '" alt="Ảnh đã gửi"><div class="khung-lop">' + khung + "</div></div>" +
     '<div class="khung-ben"><div class="khung-so"><b data-khung-so>' + soChac + "</b><span>vật thể" +
     (soKo ? " · +" + soKo + " không chắc" : "") + " · chạm để làm nổi bật</span></div>" +
+    (tuGemini ? "" : htmlTongNhom(chacTheoLop, e.ten_viet)) +
     '<div class="chips">' + chips + '</div><div class="khung-ds">' + dong + "</div>" +
     '<button type="button" class="khung-an" data-khung-toggle>Ẩn khung</button></div></div></div>';
 }
@@ -1839,7 +1869,13 @@ async function batDauLive(nut) {
   if (!url || !hop) return;
   const bao = (t) => { hop.innerHTML = '<div class="vd-nhan">' + escapeHtml(t) + "</div>"; };
   let m;
-  try { m = await napYoloWeb(bao); } catch (e) { bao((e && e.message) || "Không khởi động được YOLO trên trình duyệt."); return; }
+  try { m = await napYoloWeb(bao); } catch (e) {
+    const msg = (e && e.message) || "";
+    bao(/not found|404/i.test(msg)
+      ? "Server đang chạy bản cũ, chưa có tính năng này. Tắt server (Ctrl+C), chạy lại rồi bấm Ctrl+F5."
+      : msg || "Không khởi động được YOLO trên trình duyệt.");
+    return;
+  }
   hop.innerHTML = '<div class="vd-live"><video src="' + url + '" controls playsinline muted></video><canvas></canvas></div>' +
     '<div class="vd-trang" aria-live="polite">Bấm ▶ trên video để chạy.</div><div class="chips vd-chip"></div>';
   const st = { m, v: hop.querySelector("video"), cv: hop.querySelector("canvas"), trang: hop.querySelector(".vd-trang"),
@@ -1865,7 +1901,7 @@ async function batDauLive(nut) {
         const tong = Object.values(dem).reduce((a, b) => a + b, 0);
         st.trang.textContent = "YOLO trên máy bạn · " + (1000 / st.tocDo).toFixed(1).replace(".", ",") + " lần/giây · " +
           tong + " vật lúc " + giayVN(t) + (st.loc.size ? " · đang lọc" : "");
-        st.chip.innerHTML = Object.entries(dem).sort((a, b) => b[1] - a[1]).map(([ten, so]) =>
+        st.chip.innerHTML = htmlTongNhom(dem, m.tenViet) + Object.entries(dem).sort((a, b) => b[1] - a[1]).map(([ten, so]) =>
           '<button type="button" class="chip chip-lop' + (st.loc.has(ten) ? " on" : "") + '" data-live-lop="' + escapeHtml(ten) + '"><b>' + so + "</b> " +
           escapeHtml((m.tenViet[ten] || ten).toLowerCase()) + "</button>").join("");
       } catch (e) {
@@ -1916,6 +1952,10 @@ function htmlVideo(e) {
       dem.map((k, i) => '<circle cx="' + x(i) + '" cy="' + y(k) + '" r="3.6" fill="' + mau + '"><title>' +
         escapeHtml(tenVatThe(c, v.ten_viet)) + " " + k + " lúc " + giayVN(v.frames[i].t) + "</title></circle>").join("");
   });
+  const nhomVd = Object.values(v.groups || {}).map((g) => '<span><b>' + g.max + "</b> " + escapeHtml(g.ten.toLowerCase()) +
+    (Object.keys(g.chi_tiet_luc_max || {}).length > 1 ? " <i>(" + Object.entries(g.chi_tiet_luc_max).sort((a, b) => b[1] - a[1])
+      .map(([c, so]) => so + " " + escapeHtml(tenVatThe(c, v.ten_viet).toLowerCase())).join(", ") + ")</i>" : "") +
+    " lúc " + giayVN(g.max_at[0]) + "</span>").join("");
   const chuGiai = lop.map((c, j) => '<span class="chip"><b style="color:' + MAU_LOP[j % MAU_LOP.length] + '">●</b> ' +
     escapeHtml(tenVatThe(c, v.ten_viet).toLowerCase()) + " · nhiều nhất " + v.classes[c].max + "</span>").join("");
   const tong = (f) => Object.values(f.counting || {}).reduce((a, b) => a + b, 0);
@@ -1930,6 +1970,7 @@ function htmlVideo(e) {
       '<span class="vd-nhan"> YOLO chạy ngay trên máy bạn, ô vuông bám theo vật khi video chạy. Lần đầu tải khoảng 10MB.</span></div>'
     : '<div class="vd-nhan">Muốn xem video kèm ô nhận diện trực tiếp, hãy gửi lại video (video gốc không được lưu cùng lịch sử).</div>';
   return '<div class="panel" data-video="' + id + '"><h2>Video ' + (v.duration ? giayVN(v.duration) + " " : "") + "· đếm theo thời gian (" + n + " khung)</h2>" + phat +
+    (nhomVd ? '<div class="nhom-tong"><span class="nhom-nhan">Nhiều nhất cùng lúc theo nhóm:</span>' + nhomVd + "</div>" : "") +
     (lop.length ? '<svg class="vd-bieu" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Số vật thể theo thời gian">' + svg + "</svg>" +
       '<div class="chips">' + chuGiai + "</div>" : "") +
     '<div class="vd-tt">' + escapeHtml(v.summary || "") + "</div>" +

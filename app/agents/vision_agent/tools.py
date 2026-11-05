@@ -28,6 +28,7 @@ from app.agents.vision_agent.labels import (
     lop_tu_cau_hoi,
     nhan_viet,
     ten_viet,
+    tong_theo_nhom,
 )
 from app.agents.vision_agent.topics import khong_dau, loi_dan_hien_tai
 
@@ -412,6 +413,9 @@ def make_detect_and_count_tool(
                 ensure_ascii=False,
             )
         payload["labels_vi"] = nhan_viet(payload["counting"])
+        # Tổng theo nhóm (người / phương tiện / động vật / khác) để câu trả lời nêu được
+        # "9 người, 7 phương tiện (4 xe máy, 3 ô tô)" thay vì chỉ liệt kê từng lớp.
+        payload["totals_by_group"] = {g["ten"]: g["tong"] for g in tong_theo_nhom(payload["counting"])}
         if gemini_loi:
             ten = ", ".join(ten_viet(c) for c in payload["counting"])
             payload["note"] = (

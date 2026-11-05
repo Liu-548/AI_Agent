@@ -312,6 +312,10 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
   font-size:14.5px;white-space:pre-wrap;word-break:break-word;
 }
 .bubble-user img{max-width:220px;border-radius:10px;display:block;margin-top:9px;}
+.bubble-user .anh-luoi{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-top:9px;max-width:330px;}
+.bubble-user .anh-luoi figure{margin:0;}
+.bubble-user .anh-luoi img{width:100%;height:84px;object-fit:cover;margin-top:0;max-width:none;}
+.bubble-user .anh-luoi .img-no{margin-top:2px;}
 /* So thu tu cua anh trong hoi thoai ("Anh 3") - dung so ma tro ly dung khi hoi lai. */
 .bubble-user .img-no{display:block;margin-top:5px;font-size:12px;color:var(--muted);}
 
@@ -613,6 +617,16 @@ body.gon .route,body.gon .agent-note{display:none;}
 }
 .filechip.show{display:inline-flex;}
 .filechip img{width:32px;height:32px;border-radius:7px;object-fit:cover;}
+/* Nhieu anh trong mot tin nhan: moi anh mot o, co nut bo rieng */
+.fc-ds{display:flex;gap:6px;flex-wrap:wrap;}
+.fc-o{position:relative;width:40px;height:40px;}
+.fc-o img{width:40px;height:40px;}
+.fc-o button{position:absolute;top:-7px;right:-7px;width:19px!important;height:19px!important;
+  background:rgba(10,12,17,.9)!important;color:#fff!important;border:1px solid rgba(255,255,255,.35)!important;}
+.fc-o button:hover{background:#e5484d!important;}
+.fc-o .fc-so{position:absolute;left:2px;bottom:1px;font-size:9.5px;font-weight:700;color:#fff;
+  text-shadow:0 0 3px #000;}
+.fc-them{width:40px;height:40px;border:1px dashed var(--border)!important;border-radius:7px!important;}
 .filechip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px;}
 .filechip button{
   border:none;background:transparent;color:var(--muted);cursor:pointer;
@@ -707,7 +721,7 @@ body.gon .route,body.gon .agent-note{display:none;}
 }
 .tv-hoi:hover{border-color:var(--vision);}
 .tv-trong{padding:26px 8px;text-align:center;font-size:13px;color:var(--muted);}
-/* Chon 2-4 anh de so sanh trong mot luot (huong 6) */
+/* Chon 2-5 anh de so sanh trong mot luot (huong 6) */
 .tv-chon{
   font-family:inherit;font-size:11.5px;color:var(--text-2);cursor:pointer;
   background:transparent;border:1px dashed var(--border);border-radius:999px;padding:3px 9px;
@@ -980,9 +994,9 @@ body.gon .route,body.gon .agent-note{display:none;}
   <div class="composer">
     <div class="composer-inner">
       <div class="filechip" id="filechip">
-        <img id="filechip-img" alt="Ảnh đính kèm">
+        <div class="fc-ds" id="filechip-ds"></div>
         <span id="filechip-name"></span>
-        <button type="button" id="filechip-remove" title="Bỏ ảnh">
+        <button type="button" id="filechip-remove" title="Bỏ tất cả ảnh">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
@@ -991,7 +1005,7 @@ body.gon .route,body.gon .agent-note{display:none;}
         <button type="button" class="icon-btn" id="btn-attach" title="Đính kèm ảnh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.1a3.7 3.7 0 1 1 5.2 5.2l-9.2 9.1a1.8 1.8 0 1 1-2.6-2.6l8.5-8.4"/></svg>
         </button>
-        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/bmp" hidden>
+        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/bmp" multiple hidden>
         <textarea id="question" rows="1" placeholder="Nhắn cho Supervisor..."></textarea>
         <select id="research-mode" class="mode-select" aria-label="Chế độ tra cứu" title="Chế độ tra cứu của Research Agent">
           <option value="eco">Tiết kiệm</option>
@@ -1574,7 +1588,12 @@ function htmlSoAnh(soAnh) {
   return soAnh ? '<span class="img-no">Ảnh ' + Number(soAnh) + "</span>" : "";
 }
 
-function htmlBubbleUser(noiDung, anhBase64, soAnh) {
+function htmlBubbleUser(noiDung, anhBase64, soAnh, dsAnh, dsSo) {
+  if (dsAnh && dsAnh.length > 1) {
+    return '<div class="bubble-user">' + escapeHtml(noiDung) + '<div class="anh-luoi">' +
+      dsAnh.map((b, i) => "<figure>" + (b ? '<img src="data:image/jpeg;base64,' + b + '" alt="Ảnh đã gửi ' + (i + 1) + '">' : "") +
+        htmlSoAnh((dsSo || [])[i]) + "</figure>").join("") + "</div></div>";
+  }
   return '<div class="bubble-user">' + escapeHtml(noiDung) +
     (anhBase64 ? '<img src="data:image/jpeg;base64,' + anhBase64 + '" alt="Ảnh đã gửi">' + htmlSoAnh(soAnh) : "") + "</div>";
 }
@@ -1763,8 +1782,10 @@ function renderTinNhan(messages) {
     if (m.role === "user") {
       turn = document.createElement("div");
       turn.className = "turn";
-      turn.innerHTML = htmlBubbleUser(m.content, (m.extras || {}).image_thumb_base64, (m.extras || {}).image_no);
-      if ((m.extras || {}).image_thumb_base64) turn.dataset.thumb = m.extras.image_thumb_base64;
+      const ex = m.extras || {};
+      turn.innerHTML = htmlBubbleUser(m.content, ex.image_thumb_base64, ex.image_no, ex.image_thumbs_base64, ex.image_nos);
+      /* Khung YOLO chi ve len anh khi tin nhan co MOT anh. */
+      if (ex.image_thumb_base64 && !(ex.image_nos && ex.image_nos.length > 1)) turn.dataset.thumb = ex.image_thumb_base64;
       thread.appendChild(turn);
     } else {
       if (!turn) { turn = document.createElement("div"); turn.className = "turn"; thread.appendChild(turn); }
@@ -1946,8 +1967,11 @@ function chayCho(cho, coAnh) {
   return () => clearInterval(id);
 }
 
-async function gui(cauHoi, file) {
+async function gui(cauHoi, dsFile) {
   if (state.sending) return;
+  /* dsFile: mang anh (0-5). Goi kieu cu gui(q, file) van chay. */
+  dsFile = Array.isArray(dsFile) ? dsFile : (dsFile ? [dsFile] : []);
+  const file = dsFile[0] || null;
   state.sending = true;
   state.boDung = new AbortController();
   capNhatNutGui();
@@ -1956,23 +1980,27 @@ async function gui(cauHoi, file) {
   const thread = $("thread");
   const turn = document.createElement("div");
   turn.className = "turn";
-  const anhTam = file ? URL.createObjectURL(file) : null;
+  const dsAnhTam = dsFile.map((f) => URL.createObjectURL(f));
+  const anhTam = dsAnhTam.length === 1 ? dsAnhTam[0] : null;
   turn.innerHTML =
     '<div class="bubble-user">' + escapeHtml(cauHoi) +
-    (anhTam ? '<img src="' + anhTam + '" alt="Ảnh đã gửi">' : "") + "</div>" +
-    (laCauHoiResearch(cauHoi, file) ? htmlChoResearch() : htmlCho(anhTam));
+    (dsAnhTam.length === 1 ? '<img src="' + anhTam + '" alt="Ảnh đã gửi">' : "") +
+    (dsAnhTam.length > 1 ? '<div class="anh-luoi">' + dsAnhTam.map((u, i) =>
+      '<figure><img src="' + u + '" alt="Ảnh đã gửi ' + (i + 1) + '"></figure>').join("") + "</div>" : "") + "</div>" +
+    (laCauHoiResearch(cauHoi, file) ? htmlChoResearch() : htmlCho(dsAnhTam[0] || null));
   thread.appendChild(turn);
   xuongCuoi();
 
   const choEl = turn.querySelector(".cho");
-  const dungCho = choEl.classList.contains("cho-rs") ? chayChoResearch(choEl) : chayCho(choEl, !!anhTam);
+  const dungCho = choEl.classList.contains("cho-rs") ? chayChoResearch(choEl) : chayCho(choEl, dsAnhTam.length > 0);
 
   const body = new FormData();
   body.append("question", cauHoi);
   body.append("user_id", state.userId);
   if (state.currentId) body.append("conversation_id", state.currentId);
   else if (state.projectMoi) body.append("project_id", state.projectMoi);
-  if (file) body.append("file", file);
+  if (dsFile.length === 1) body.append("file", dsFile[0]);
+  else dsFile.forEach((f) => body.append("files", f));
   const cheDo = $("research-mode");
   if (!cheDo.disabled) body.append("research_mode", cheDo.value);
 
@@ -1983,8 +2011,12 @@ async function gui(cauHoi, file) {
     dots.outerHTML = htmlTraLoi(answer, extras, anhTam);
     kichHoatKhung(turn);
     /* Server vua danh so cho anh nay -> hien "Anh N" duoi anh vua gui. */
-    const anhVuaGui = turn.querySelector(".bubble-user img");
+    const anhVuaGui = turn.querySelector(".bubble-user > img");
     if (data.image_no && anhVuaGui) anhVuaGui.insertAdjacentHTML("afterend", htmlSoAnh(data.image_no));
+    (data.image_nos || []).forEach((so, i) => {
+      const o = turn.querySelectorAll(".bubble-user .anh-luoi figure")[i];
+      if (o) o.insertAdjacentHTML("beforeend", htmlSoAnh(so));
+    });
     cuonLaiKhiAnhXong(turn);
 
     if (data.conversation_id && data.conversation_id !== state.currentId) {
@@ -1992,7 +2024,7 @@ async function gui(cauHoi, file) {
     }
     await napDanhSach();
     datTieuDeTren();
-    if (file) napThuVien();
+    if (dsFile.length) napThuVien();
   } catch (e) {
     const dots = turn.querySelector(".cho");
     const daDung = e && e.name === "AbortError";
@@ -2009,7 +2041,7 @@ async function gui(cauHoi, file) {
       nut.type = "button";
       nut.className = "thu-lai";
       nut.textContent = "Thử lại";
-      nut.onclick = () => { turn.remove(); gui(cauHoi, file); };
+      nut.onclick = () => { turn.remove(); gui(cauHoi, dsFile); };
       hop.appendChild(nut);
       dots.replaceWith(hop);
     }
@@ -2061,8 +2093,14 @@ const CHIP_ANH = [
 ];
 const TEN_CHU_DE = { animal: "động vật", travel: "du lịch", food: "ẩm thực", document: "tài liệu", chart: "biểu đồ", general: "chung" };
 
+const CHIP_NHIEU_ANH = [
+  { nhan: "So sánh các ảnh", q: "So sánh các ảnh này: giống và khác nhau ở điểm nào?", icon: "M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M12 3v18" },
+  { nhan: "Ảnh nào nhiều vật hơn?", q: "Đếm vật thể trong từng ảnh và cho biết ảnh nào nhiều hơn.", icon: "M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M9 9h6v6H9z" },
+  { nhan: "Có phải cùng loài/vật?", q: "Các ảnh này có phải cùng một loài (hoặc cùng một vật) không? Nêu điểm phân biệt.", icon: "M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z" },
+];
+function chipDangDung() { return dsFileDinhKem.length > 1 ? CHIP_NHIEU_ANH : CHIP_ANH; }
 function veChipAnh() {
-  $("chips-anh").innerHTML = CHIP_ANH.map((c, i) =>
+  $("chips-anh").innerHTML = chipDangDung().map((c, i) =>
     '<button type="button" class="chip-nhanh" data-chip="' + i + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + c.icon + '"/></svg>' +
     escapeHtml(c.nhan) + "</button>").join("");
@@ -2122,8 +2160,8 @@ function veThuVien() {
   capNhatThanhSoSanh();
 }
 
-/* So sanh nhieu anh (huong 6): chon 2-4 anh trong thu vien -> dien san cau hoi. */
-const SO_ANH_SO_SANH_TOI_DA = 4;
+/* So sanh nhieu anh (huong 6): chon 2-5 anh trong thu vien -> dien san cau hoi. */
+const SO_ANH_SO_SANH_TOI_DA = 5;
 function capNhatThanhSoSanh() {
   const ds = [...state.tvChon].sort((a, b) => a - b);
   $("tv-ss").classList.toggle("show", ds.length > 0);
@@ -2198,17 +2236,52 @@ function hoiVeAnh(stt) {
 /* ===================================================================== *
  * O nhap
  * ===================================================================== */
+/* Anh dinh kem cho tin nhan sap gui: toi da SO_ANH_MOI_TIN anh (khop server). Chon
+   them anh KHONG thay anh cu nua ma noi them vao, de gui 2-5 anh so sanh mot luot.
+   fileDinhKem = anh dau tien (giu cho cac cho chi can biet "co anh hay khong"). */
+const SO_ANH_MOI_TIN = 5;
+let dsFileDinhKem = [];
 let fileDinhKem = null;
 
-function datFile(f) {
-  fileDinhKem = f || null;
+function veFileDinhKem() {
+  fileDinhKem = dsFileDinhKem[0] || null;
   const chip = $("filechip");
-  if (!f) { chip.classList.remove("show"); $("file-input").value = ""; capNhatNutGui(); capNhatChipAnh(); return; }
-  $("filechip-name").textContent = f.name;
-  $("filechip-img").src = URL.createObjectURL(f);
+  $("file-input").value = "";
+  if (!dsFileDinhKem.length) {
+    chip.classList.remove("show");
+    capNhatNutGui(); capNhatChipAnh(); veChipAnh();
+    return;
+  }
+  const n = dsFileDinhKem.length;
+  $("filechip-ds").innerHTML = dsFileDinhKem.map((f, i) =>
+    '<div class="fc-o"><img src="' + URL.createObjectURL(f) + '" alt="Ảnh đính kèm ' + (i + 1) + '">' +
+    (n > 1 ? '<span class="fc-so">' + (i + 1) + "</span>" : "") +
+    '<button type="button" data-bo-anh="' + i + '" title="Bỏ ảnh này" aria-label="Bỏ ảnh ' + (i + 1) + '">' +
+    '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'
+  ).join("") + (n < SO_ANH_MOI_TIN
+    ? '<button type="button" class="fc-them" data-them-anh="1" title="Thêm ảnh để so sánh" aria-label="Thêm ảnh">+</button>' : "");
+  $("filechip-name").textContent = n === 1 ? dsFileDinhKem[0].name : n + " ảnh · gửi cùng lúc để so sánh";
   chip.classList.add("show");
   capNhatNutGui();
+  veChipAnh();
   capNhatChipAnh();
+}
+
+/* Them anh (chon file, dan, keo tha): noi vao danh sach, khong thay the. */
+function themFile(ds) {
+  const anh = [...(ds || [])].filter((f) => f && (f.type || "").startsWith("image/"));
+  if (!anh.length) return;
+  const conCho = SO_ANH_MOI_TIN - dsFileDinhKem.length;
+  if (conCho <= 0) { toast("Tối đa " + SO_ANH_MOI_TIN + " ảnh trong một tin nhắn."); return; }
+  if (anh.length > conCho) toast("Chỉ thêm được " + conCho + " ảnh nữa (tối đa " + SO_ANH_MOI_TIN + ").");
+  dsFileDinhKem = dsFileDinhKem.concat(anh.slice(0, conCho));
+  veFileDinhKem();
+}
+
+/* Giu ten cu: datFile(null) = bo het; datFile(f) = chi mot anh nay. */
+function datFile(f) {
+  dsFileDinhKem = f ? [f] : [];
+  veFileDinhKem();
 }
 
 function capNhatNutGui() {
@@ -2310,7 +2383,7 @@ function ganSuKien() {
     const nut = e.target.closest("[data-chip]");
     if (!nut) return;
     const ta2 = $("question");
-    ta2.value = CHIP_ANH[Number(nut.dataset.chip)].q;
+    ta2.value = chipDangDung()[Number(nut.dataset.chip)].q;
     tuGianTextarea();
     capNhatNutGui();
     ta2.focus();
@@ -2432,19 +2505,24 @@ function ganSuKien() {
   });
   ta.addEventListener("paste", (e) => {
     const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
-    if (item) { datFile(item.getAsFile()); toast("Đã đính kèm ảnh từ clipboard."); }
+    if (item) { themFile([item.getAsFile()]); toast("Đã đính kèm ảnh từ clipboard."); }
   });
 
   $("btn-attach").onclick = () => $("file-input").click();
-  $("file-input").onchange = (e) => datFile(e.target.files[0]);
+  $("file-input").onchange = (e) => themFile(e.target.files);
   $("filechip-remove").onclick = () => datFile(null);
+  $("filechip-ds").addEventListener("click", (e) => {
+    const bo = e.target.closest("[data-bo-anh]");
+    if (bo) { dsFileDinhKem.splice(Number(bo.dataset.boAnh), 1); veFileDinhKem(); return; }
+    if (e.target.closest("[data-them-anh]")) $("file-input").click();
+  });
 
   $("form").addEventListener("submit", (e) => {
     e.preventDefault();
     if (state.sending) { if (state.boDung) state.boDung.abort(); return; }
     const q = ta.value.trim();
     if (!q) return;
-    const f = fileDinhKem;
+    const f = dsFileDinhKem.slice();
     ta.value = "";
     tuGianTextarea();
     datFile(null);
@@ -2458,8 +2536,7 @@ function ganSuKien() {
   ["dragleave", "drop"].forEach((ev) =>
     bar.addEventListener(ev, (e) => { e.preventDefault(); bar.classList.remove("drag"); }));
   bar.addEventListener("drop", (e) => {
-    const f = e.dataTransfer?.files?.[0];
-    if (f && f.type.startsWith("image/")) datFile(f);
+    themFile(e.dataTransfer?.files);
   });
 
   /* --- cai dat --- */

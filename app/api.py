@@ -556,45 +556,51 @@ TRA_LOI_RONG = (
 
 def _ghi_nho_anh(
     conversation_id: str,
-    saved_path: Optional[Path],
+    saved_paths: List[Path],
     bo_giai: Optional[image_memory.BoGiaiAnh],
     ds_anh: List[dict],
     ket_qua_vision: str,
-    ho_so_moi: Optional[dict] = None,
-) -> Optional[int]:
-    """Cap nhat bo nho anh sau khi da co cau tra loi. Tra ve so thu tu cua anh
-    vua gui (None neu luot nay khong co anh moi).
+    ho_so_moi: Optional[List[Optional[dict]]] = None,
+) -> List[int]:
+    """Cap nhat bo nho anh sau khi da co cau tra loi. Tra ve so thu tu cua cac anh
+    vua gui (rong neu luot nay khong co anh moi).
 
     Hai viec:
-      1. Anh MOI: nen lai, lap ho so, ghi vao database.
+      1. Anh MOI (mot hoac nhieu): nen lai, lap ho so, ghi vao database theo thu tu.
       2. Anh CU duoc hoi lai: ghi them dieu vua biet vao ho so cua no.
 
     `ket_qua_vision` la cau tra loi cua vision agent trong luot nay. No chi duoc
-    ghi vao ho so khi luot nay dung DUNG MOT anh: dung hai anh tro len thi khong
-    biet cau tra loi thuoc ve anh nao, ghi nham con te hon khong ghi.
+    ghi vao ho so khi luot nay dung DUNG MOT anh: dung hai anh tro len (so sanh)
+    thi khong biet cau tra loi thuoc ve anh nao, ghi nham con te hon khong ghi.
 
     Bo nho anh la phan cong them: loi o day KHONG duoc lam hong cau tra loi da
     co, nen moi thu boc trong try/except va chi ghi log.
     """
-    so_moi: Optional[int] = None
+    so_moi: List[int] = []
     try:
         da_dung = list(bo_giai.da_dung) if bo_giai is not None else []
-        anh_moi = set(bo_giai.anh_moi) if bo_giai is not None else set()
+        anh_moi = bo_giai.anh_moi if bo_giai is not None else {}
         ghi_chu = ket_qua_vision if len(da_dung) == 1 else ""
+        # anh_moi: {so du kien: duong dan}, dung de biet ghi chu thuoc anh moi nao.
+        so_cua_duong_dan = {str(v): k for k, v in anh_moi.items()}
 
-        if saved_path is not None:
-            ghi_chu_moi = ghi_chu if da_dung and da_dung[0] in anh_moi else ""
-            if ho_so_moi is not None:
+        for i, duong_dan in enumerate(saved_paths):
+            so_du_kien = so_cua_duong_dan.get(str(duong_dan))
+            ghi_chu_moi = ghi_chu if ghi_chu and so_du_kien is not None and da_dung[0] == so_du_kien else ""
+            ho_so_san = (ho_so_moi or [None] * len(saved_paths))[i] if ho_so_moi else None
+            if ho_so_san is not None:
                 # Ho so da lap truoc khi tra loi (de biet chu de): chi them ghi chu.
-                ho_so = image_memory.them_ghi_chu(ho_so_moi, ghi_chu_moi)
+                ho_so = image_memory.them_ghi_chu(ho_so_san, ghi_chu_moi)
             else:
-                ho_so = image_memory.tao_ho_so(saved_path, ghi_chu_moi)
-            so_moi = store.them_anh(
-                conversation_id,
-                image_memory.nen_anh(saved_path),
-                temp_path=str(saved_path),
-                profile=ho_so,
-                gioi_han=settings.image_memory_max,
+                ho_so = image_memory.tao_ho_so(duong_dan, ghi_chu_moi)
+            so_moi.append(
+                store.them_anh(
+                    conversation_id,
+                    image_memory.nen_anh(duong_dan),
+                    temp_path=str(duong_dan),
+                    profile=ho_so,
+                    gioi_han=settings.image_memory_max,
+                )
             )
         if ghi_chu and da_dung[0] not in anh_moi:
             ho_so = next((a["profile"] for a in ds_anh if a["stt"] == da_dung[0]), {})
@@ -1035,6 +1041,11 @@ def ask_research(
         raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
 
 
+# Gui nhieu anh mot luot de so sanh: khop so anh toi da cua mot luot so sanh
+# (vision_agent.tools.SO_ANH_SO_SANH_TOI_DA).
+SO_ANH_MOI_LUOT_TOI_DA = 5
+
+
 @app.post("/api/ask")
 def ask_supervisor(
     question: str = Form(..., description="Cau hoi bat ky - supervisor tu chon agent con phu hop"),
@@ -1044,6 +1055,9 @@ def ask_supervisor(
     research_mode: str = Form("", description="eco | standard | full - de trong = theo RESEARCH_MODE cua server. Chi co tac dung khi RESEARCH_ARCH=topics"),
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
+    ),
+    files: List[UploadFile] = File(
+        None, description=f"Nhieu anh trong MOT tin nhan (vd de so sanh), toi da {SO_ANH_MOI_LUOT_TOI_DA}"
     ),
     authorization: Optional[str] = Header(None),
 ):
@@ -1066,12 +1080,19 @@ def ask_supervisor(
     if che_do and che_do not in RESEARCH_MODES:
         raise HTTPException(status_code=400, detail=f"research_mode phai la mot trong {list(RESEARCH_MODES)}")
     luu_lich_su = bool(uid)
-    saved_path: Optional[Path] = None
     hoi_thoai: Optional[dict] = None
+    tai_len = [f for f in [file, *(files or [])] if f is not None and f.filename]
+    if len(tai_len) > SO_ANH_MOI_LUOT_TOI_DA:
+        raise HTTPException(
+            status_code=400, detail=f"Toi da {SO_ANH_MOI_LUOT_TOI_DA} anh trong mot tin nhan."
+        )
+    saved_paths: List[Path] = []
 
     try:
-        if file is not None and file.filename:
-            saved_path = _save_upload(file)
+        for f in tai_len:
+            saved_paths.append(_save_upload(f))
+        # Anh "chinh" cua luot: dung cho khung YOLO ve len anh (chi khi gui MOT anh).
+        saved_path: Optional[Path] = saved_paths[0] if len(saved_paths) == 1 else None
 
         lich_su: List[dict] = []
         ds_anh: List[dict] = []
@@ -1099,34 +1120,44 @@ def ask_supervisor(
             "configurable": {"tool_sink": tool_sink, "research_mode": che_do or None},
         }
         bo_giai: Optional[image_memory.BoGiaiAnh] = None
-        ho_so_moi: Optional[dict] = None
+        ho_so_moi: List[Optional[dict]] = []
         message = question
-        if luu_lich_su:
+        if luu_lich_su or len(saved_paths) > 1:
             # Nguoi co lich su: anh duoc goi bang bi danh IMG<n>. Supervisor chi
             # can chep 4-5 ky tu thay vi mot duong dan file dai, va anh cu da bi
             # don khoi o dia van dung lai duoc tu database khi can.
-            so_moi: Optional[int] = None
-            if saved_path is not None:
-                so_moi = store.so_anh_ke_tiep(conversation_id) if conversation_id else 1
-                message = f"{question}\nImage: {image_memory.bi_danh(so_moi)}"
-                if settings.vision_topics:
+            # Khach vang lai gui NHIEU anh: cung danh so IMG1..IMGn cho rieng luot nay
+            # (khong luu gi) de supervisor so sanh duoc trong mot lan goi.
+            ds_so_moi: List[int] = []
+            if saved_paths:
+                so_dau = store.so_anh_ke_tiep(conversation_id) if (luu_lich_su and conversation_id) else 1
+                ds_so_moi = [so_dau + i for i in range(len(saved_paths))]
+                bi_danh = ", ".join(image_memory.bi_danh(so) for so in ds_so_moi)
+                if len(ds_so_moi) == 1:
+                    message = f"{question}\nImage: {bi_danh}"
+                else:
+                    message = (
+                        f"{question}\nImages: {bi_danh} "
+                        f"({len(ds_so_moi)} images attached together to THIS message)"
+                    )
+                if settings.vision_topics and luu_lich_su:
                     # Chu de anh phai biet TRUOC khi vision agent nhin anh de luot
                     # dau da dung loi dan dung chu de. Day chi la doi cho lap ho so
                     # (van mot luot goi model nhu truoc): khong lap lai sau khi tra loi.
-                    ho_so_moi = image_memory.tao_ho_so(saved_path)
-            danh_muc = image_memory.khoi_danh_muc(ds_anh, so_moi)
+                    ho_so_moi = [image_memory.tao_ho_so(p) for p in saved_paths]
+            danh_muc = image_memory.khoi_danh_muc(ds_anh, ds_so_moi)
             if danh_muc:
                 message = f"{danh_muc}\n\n{message}"
                 bo_giai = image_memory.BoGiaiAnh(
-                    conversation_id or None,
+                    (conversation_id or None) if luu_lich_su else None,
                     ds_anh,
                     UPLOAD_DIR,
-                    anh_moi={so_moi: str(saved_path)} if so_moi is not None else None,
-                    ho_so_moi={so_moi: ho_so_moi} if ho_so_moi is not None else None,
+                    anh_moi={so: str(p) for so, p in zip(ds_so_moi, saved_paths)},
+                    ho_so_moi={so: h for so, h in zip(ds_so_moi, ho_so_moi) if h is not None},
                 )
                 run_config["configurable"]["image_resolver"] = bo_giai
         elif saved_path is not None:
-            # Khach vang lai: khong luu gi nen khong co bo nho anh, giu cach cu.
+            # Khach vang lai gui MOT anh: khong luu gi nen khong co bo nho anh, giu cach cu.
             message = f"{question}\nImage: {saved_path}"
 
         graph = _get_supervisor_graph()
@@ -1184,25 +1215,29 @@ def ask_supervisor(
             cid = hoi_thoai["id"]
             extras_user: dict = {}
             # Dieu vua biet ve anh = cau tra loi cua vision agent trong luot nay.
-            so_anh = _ghi_nho_anh(
+            ds_so_anh = _ghi_nho_anh(
                 cid,
-                saved_path,
+                saved_paths,
                 bo_giai,
                 ds_anh,
                 tool_outputs.get("vision_agent_tool", ""),
                 ho_so_moi,
             )
-            if saved_path is not None:
-                # image_path giu lai cho tuong thich nguoc; image_no la so thu tu
-                # trong bo nho anh ("Anh 3"); image_thumb_base64 de mo lai hoi
-                # thoai cu van thay anh da gui.
-                extras_user["image_path"] = str(saved_path)
-                if so_anh is not None:
-                    extras_user["image_no"] = so_anh
-                    response["image_no"] = so_anh
-                anh_nho = _thumbnail_base64(saved_path)
-                if anh_nho:
-                    extras_user["image_thumb_base64"] = anh_nho
+            if saved_paths:
+                # image_path / image_no / image_thumb_base64: anh DAU, giu cho tuong
+                # thich nguoc (UI cu, lich su cu). Gui nhieu anh: them danh sach
+                # image_nos / image_thumbs_base64 de mo lai hoi thoai van thay du anh.
+                extras_user["image_path"] = str(saved_paths[0])
+                if ds_so_anh:
+                    extras_user["image_no"] = ds_so_anh[0]
+                    response["image_no"] = ds_so_anh[0]
+                anh_nho = [_thumbnail_base64(p) for p in saved_paths]
+                if anh_nho[0]:
+                    extras_user["image_thumb_base64"] = anh_nho[0]
+                if len(saved_paths) > 1:
+                    extras_user["image_nos"] = ds_so_anh
+                    response["image_nos"] = ds_so_anh
+                    extras_user["image_thumbs_base64"] = anh_nho
             store.them_tin_nhan(cid, "user", question, extras_user)
             store.them_tin_nhan(
                 cid,

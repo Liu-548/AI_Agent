@@ -138,7 +138,7 @@ def cac_bi_danh(query: str, image_path: Optional[str]) -> list:
 
 
 def so_sanh_nhieu_anh(query: str, ds_so: list, config: Optional[dict]):
-    """Hướng 6: so sánh 2-4 ảnh trong MỘT lượt model (thay vì gọi riêng từng ảnh rồi ghép).
+    """Hướng 6: so sánh 2-5 ảnh trong MỘT lượt model (thay vì gọi riêng từng ảnh rồi ghép).
 
     Câu hỏi đếm ("ảnh nào nhiều chó hơn") thì đếm từng ảnh bằng YOLO trước (miễn phí)
     rồi đưa số đếm cho model, vì model nhìn ảnh đếm không đáng tin bằng YOLO.
@@ -331,7 +331,7 @@ def vision_tool(
     Input should be a clear query describing what to analyze or detect.
     `image_path` is the image to look at: an id from IMAGE MEMORY such as "IMG3",
     or a file path / URL exactly as the user gave it. One image per call, EXCEPT to
-    compare 2-4 remembered images: then pass all their ids in one call, comma-separated,
+    compare 2-5 remembered images: then pass all their ids in one call, comma-separated,
     e.g. image_path="IMG1,IMG3".
     """
     # Hướng 6: nhiều ảnh -> một lượt so sánh.

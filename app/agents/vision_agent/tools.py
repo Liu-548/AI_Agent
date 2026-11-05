@@ -177,7 +177,7 @@ def tra_loi_truc_tiep(image_ref: str, cau_hoi: str, vision_llm=None) -> str:
 
 # Giới hạn số ảnh trong một lượt so sánh: mỗi ảnh thêm là thêm token, và quá nhiều
 # ảnh thì model dễ nhầm ảnh nào là ảnh nào.
-SO_ANH_SO_SANH_TOI_DA = 4
+SO_ANH_SO_SANH_TOI_DA = 5
 
 
 def tra_loi_nhieu_anh(
@@ -186,7 +186,7 @@ def tra_loi_nhieu_anh(
     vision_llm=None,
     so_dem: Optional[dict] = None,
 ) -> str:
-    """MỘT lượt model nhìn 2-4 ảnh cùng lúc và trả lời câu hỏi so sánh.
+    """MỘT lượt model nhìn 2-5 ảnh cùng lúc và trả lời câu hỏi so sánh.
 
     anh   : [(nhãn, đường dẫn/URL), ...], nhãn là số thứ tự ảnh trong hội thoại (1, 3...)
     so_dem: {nhãn: {"dog": 2, ...}} số đếm YOLO của từng ảnh (câu hỏi đếm), để model

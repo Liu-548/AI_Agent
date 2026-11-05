@@ -1,7 +1,7 @@
 """Hướng 6: so sánh nhiều ảnh trong MỘT lượt model.
 
 Lời hứa:
-  - vision_agent_tool nhận "IMG1,IMG3" -> đúng MỘT lần gọi model, mang cả hai ảnh, mỗi
+  - vision_agent_tool nhận "IMG1,IMG3" (tối đa 5 ảnh) -> đúng MỘT lần gọi model, mang cả hai ảnh, mỗi
     ảnh có nhãn "Ảnh <n>" đứng ngay trước. Không chạy vision agent ReAct.
   - Câu hỏi đếm ("ảnh nào nhiều chó hơn") -> YOLO đếm từng ảnh, số đếm được đưa cho model.
   - Một ảnh như cũ không đổi hành vi. Ảnh không có trong bộ nhớ -> lỗi theo hợp đồng tool.
@@ -118,14 +118,14 @@ def test_mot_anh_van_di_duong_cu(he):
     assert len(_anh_trong(he.llm.lan_goi[0])) == 1
 
 
-def test_toi_da_bon_anh(he, tmp_path):
-    for so in (5, 6):
+def test_toi_da_nam_anh(he, tmp_path):
+    for so in (5, 6, 7):
         p = tmp_path / f"a{so}.png"
         Image.new("RGB", (8, 8)).save(p)
         he.anh[so] = str(p)
-    tin = he.hoi("So sánh", "IMG1,IMG3,IMG4,IMG5,IMG6")
-    assert len(_anh_trong(he.llm.lan_goi[0])) == 4
-    assert tin.artifact["compared_images"] == [1, 3, 4, 5]
+    tin = he.hoi("So sánh", "IMG1,IMG3,IMG4,IMG5,IMG6,IMG7")
+    assert len(_anh_trong(he.llm.lan_goi[0])) == 5
+    assert tin.artifact["compared_images"] == [1, 3, 4, 5, 6]
 
 
 def test_anh_khong_con_trong_bo_nho(he):

@@ -96,12 +96,39 @@ CHU_DE = {
                 "noi dung chu",
             ),
         ),
+        ChuDe(
+            "chart",
+            "biểu đồ",
+            "TOPIC FOCUS - charts and scientific figures: say what kind of figure it is "
+            "(bar/line/pie chart, scatter plot, data table, flowchart, scientific diagram) and "
+            "its title. For a chart: give the axes with their units and the legend, then a "
+            "Markdown table of the data values you can actually read (prefix estimated values "
+            "with '~', write '?' for any value you cannot read; never invent numbers), then 1-2 "
+            "sentences on the main trend or comparison. For a diagram: list its parts and how "
+            "they connect. End with ONE last line exactly in this form: 'KHÁI NIỆM: <1-3 key "
+            "scientific concepts shown, each in Vietnamese with the English term in "
+            "parentheses>' so related research can be looked up.",
+            (
+                "bieu do",
+                "chart",
+                "graph",
+                "bang so lieu",
+                "doc so lieu",
+                "so do khoi",
+                "so do quy trinh",
+                "so do khoa hoc",
+                "so do tu duy",
+                "truc tung",
+                "truc hoanh",
+            ),
+        ),
         ChuDe(CHU_DE_CHUNG, "chung", ""),
     )
 }
 
 # Lưu ý khi thêm từ khoá: so khớp là KHÔNG DẤU nên "chó này" và "chỗ này" đều thành
 # "cho nay". Tránh các cụm dễ đụng nhau như vậy, và test sẽ bắt nếu lỡ thêm.
+# Ví dụ đã cố ý KHÔNG dùng: "do thi" (đồ thị / đô thị), "so do" trơn (sơ đồ / số đo / sổ đỏ).
 
 # Chủ đề mà bước lập hồ sơ ảnh được phép trả về, theo đúng thứ tự trong prompt.
 CHU_DE_IDS = tuple(CHU_DE)

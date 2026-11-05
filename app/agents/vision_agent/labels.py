@@ -296,6 +296,11 @@ def dung_cau_hoi(cau_hoi: Optional[str]) -> Iterator[None]:
         _CAU_HOI_HIEN_TAI.reset(token)
 
 
+def cau_hoi_hien_tai() -> Optional[str]:
+    """Câu hỏi của lượt hiện tại (đặt bởi `dung_cau_hoi`), None nếu không có."""
+    return _CAU_HOI_HIEN_TAI.get()
+
+
 def lop_dang_loc() -> FrozenSet[str]:
     """Các lớp cần giữ cho lượt hiện tại; rỗng nếu không có câu hỏi hay không nêu loại."""
     cau_hoi = _CAU_HOI_HIEN_TAI.get()

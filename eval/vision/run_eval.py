@@ -3,12 +3,13 @@
     python eval/vision/tai_anh.py          # một lần: tải ảnh
     python eval/vision/run_eval.py         # đo + ghi eval/vision/KET_QUA.md
 
-Đo bốn thứ:
+Đo năm thứ (phần 5 chỉ chạy khi thêm --gemini vì tốn lượt):
   1. Độ chính xác ĐẾM của YOLO (yolo11n.onnx) trên ảnh có đáp án, kèm quét ngưỡng tin cậy.
   2. Bộ lọc loại vật thể: hỏi "có mấy con mèo" thì còn lại gì so với không lọc.
   3. Lỗi xoay ảnh EXIF: ảnh dọc kiểu điện thoại, đếm trước và sau khi sửa.
-  4. Tỉ lệ phân loại CHỦ ĐỀ từ câu hỏi (động vật / du lịch / món ăn / tài liệu / chung)
+  4. Tỉ lệ phân loại CHỦ ĐỀ từ câu hỏi (động vật / du lịch / món ăn / tài liệu / biểu đồ / chung)
      và tỉ lệ hiểu đúng loại vật thể trong câu hỏi.
+  5. Vật ngoài 80 loại COCO ("con bướm", "người hói đầu") đếm bằng Gemini.
 
 Ảnh riêng của bạn (đặc biệt ảnh dọc chụp từ điện thoại): bỏ vào `eval/vision/anh_rieng/`
 kèm `nhan_rieng.json` dạng {"IMG_0001.jpg": {"dog": 2, "person": 1}} (xem README.md).
@@ -36,6 +37,7 @@ from PIL import Image  # noqa: E402
 
 from app.agents.vision_agent.image_utils import chuan_hoa_huong_anh  # noqa: E402
 from app.agents.vision_agent.labels import (  # noqa: E402
+    COCO_VI,
     loc_theo_lop,
     lop_tu_cau_hoi,
     ten_viet,
@@ -121,7 +123,7 @@ def nap_bo_anh(thu_muc_anh: Path) -> list:
             continue
         if hashlib.sha256(p.read_bytes()).hexdigest() != a["sha256"]:
             sys.exit(f"{a['file']}: sha256 không khớp với lúc gắn nhãn. Chạy lại tai_anh.py.")
-        ds.append({"file": a["file"], "path": p, "dem": a["dem"], "rieng": False})
+        ds.append({"file": a["file"], "path": p, "dem": a["dem"], "dem_ngoai": a.get("dem_ngoai", {}), "rieng": False})
     if thieu:
         sys.exit(f"Thiếu {len(thieu)} ảnh trong {thu_muc_anh}. Chạy trước: python eval/vision/tai_anh.py")
 
@@ -132,7 +134,10 @@ def nap_bo_anh(thu_muc_anh: Path) -> list:
                 continue
             p = THU_MUC / "anh_rieng" / ten
             if p.is_file():
-                ds.append({"file": ten, "path": p, "dem": dem, "rieng": True})
+                # Khoá không phải tên lớp COCO ("quả xoài") -> phần 5 (Gemini), không chấm YOLO.
+                coco = {k: v for k, v in dem.items() if k in COCO_VI}
+                ngoai = {k: v for k, v in dem.items() if k not in COCO_VI}
+                ds.append({"file": ten, "path": p, "dem": coco, "dem_ngoai": ngoai, "rieng": True})
             else:
                 print(f"[cảnh báo] anh_rieng/{ten} có trong nhan_rieng.json nhưng không có file, bỏ qua.")
     return ds
@@ -268,6 +273,33 @@ def exif_anh_rieng(ds, weights, conf, iou):
             ra.append({"anh": a["file"], "huong": huong, "pixel_luu": kich_thuoc,
                        "dap_an": a["dem"], "cu": cu, "moi": moi})
     return ra
+
+
+# --------------------------------------------------------------------------- #
+# 5. Vật ngoài COCO bằng Gemini (tùy chọn: tốn lượt)
+# --------------------------------------------------------------------------- #
+def do_gemini(ds, bat: bool):
+    """Mỗi cặp (ảnh, cụm ngoài COCO): hỏi đúng như người dùng "Có mấy <cụm>?" rồi chấm.
+
+    Chỉ chạy khi bật --gemini (mỗi cặp tốn MỘT lượt Gemini). Đồng thời kiểm tra luồng:
+    câu hỏi đó có thật sự được chia sang Gemini không (can_dung_gemini).
+    """
+    from app.agents.vision_agent.gemini_detect import can_dung_gemini, dem_bang_gemini
+
+    hang = []
+    for a in ds:
+        for cum, that in (a.get("dem_ngoai") or {}).items():
+            q = f"Có mấy {cum}?"
+            muc_tieu = can_dung_gemini(q)
+            r = {"anh": a["file"], "cum": cum, "that": that, "chia_gemini": bool(muc_tieu), "du_doan": None, "loi": ""}
+            if bat and muc_tieu:
+                kq = dem_bang_gemini(str(a["path"]), muc_tieu)
+                if "error" in kq:
+                    r["loi"] = " ".join(kq["error"].split())[:90].replace("|", "/")
+                else:
+                    r["du_doan"] = sum(kq["counting"].values())
+            hang.append(r)
+    return hang
 
 
 # --------------------------------------------------------------------------- #
@@ -411,6 +443,24 @@ def viet_bao_cao(ctx: dict) -> str:
       "lộ một lỗi (\"Đếm số chó và mèo\" chỉ ra mèo) và quy tắc đã được sửa sau đó, nên 100% ở đây là con số "
       "SAU KHI chỉnh theo chính bộ này, lạc quan hơn so với câu hỏi chưa từng thấy. Phần 2 \"hiểu đúng loại\" dùng "
       "câu hỏi mẫu do người viết biết trước từ khoá nên cũng không độc lập.\n")
+    g = ctx.get("gemini") or []
+    if g:
+        P("## 5. Đếm vật ngoài 80 loại COCO bằng Gemini\n")
+        chia = sum(1 for r in g if r["chia_gemini"])
+        P(f"Câu hỏi \"Có mấy <cụm>?\" được chia đúng sang Gemini: **{chia}/{len(g)}** (đọc câu hỏi, không tốn lượt).\n")
+        da_chay = [r for r in g if r["du_doan"] is not None]
+        if not ctx.get("gemini_bat"):
+            P(f"Chưa đo độ chính xác: chạy lại với `--gemini` (tốn {chia} lượt Gemini, cần GEMINI/GOOGLE key trong .env).\n")
+        else:
+            s = tong_hop([(r["anh"], r["cum"], r["that"], r["du_doan"]) for r in da_chay])
+            if s:
+                P(f"Gemini đếm đúng tuyệt đối **{s['dung']}/{s['n']} = {pc(s['ti_le_dung'])}**, MAE {s['mae']:.2f}.\n")
+            P("| Ảnh | Cụm | Đáp án | Gemini |\n|---|---|---|---|")
+            for r in g:
+                kq = r["du_doan"] if r["du_doan"] is not None else ("lỗi: " + r["loi"] if r["loi"] else "không chia sang Gemini")
+                P(f"| {r['anh']} | {r['cum']} | {r['that']} | {kq} |")
+            P("")
+        P("Mẫu rất nhỏ, đáp án gắn tay: chỉ để minh hoạ tính năng, chưa đủ để kết luận độ chính xác của Gemini.\n")
     return "\n".join(L)
 
 
@@ -422,6 +472,8 @@ def main() -> int:
     ap.add_argument("--anh-dir", default=str(THU_MUC / "anh"))
     ap.add_argument("--ghi", default=str(THU_MUC / "KET_QUA.md"), help="file báo cáo Markdown; '-' = chỉ in ra màn hình")
     ap.add_argument("--json", default="", help="ghi thêm số liệu thô ra file JSON")
+    ap.add_argument("--gemini", action="store_true",
+                    help="đo thêm phần 5: vật ngoài COCO bằng Gemini (tốn 1 lượt Gemini mỗi cặp, cần key)")
     args = ap.parse_args()
 
     if not Path(args.weights).is_file():
@@ -438,6 +490,7 @@ def main() -> int:
     exif, exif_chi_tiet = do_exif(ds, args.weights, args.conf, args.iou)
     exif_rieng = exif_anh_rieng(ds, args.weights, args.conf, args.iou)
     chu_de, loai_cau_hoi = do_chu_de()
+    gemini = do_gemini(ds, args.gemini)
 
     ctx = {
         "weights": Path(args.weights).name, "iou": args.iou, "nguong": args.conf,
@@ -445,6 +498,7 @@ def main() -> int:
         "exif_rieng": exif_rieng, "chu_de": chu_de, "loai_cau_hoi": loai_cau_hoi, "ms_trung_vi": ms,
         "so_anh_chuan": sum(1 for a in ds if a["dem"] and not a["rieng"]),
         "so_anh_rieng": sum(1 for a in ds if a["rieng"]),
+        "gemini": gemini, "gemini_bat": args.gemini,
     }
     bao_cao = viet_bao_cao(ctx)
     print()

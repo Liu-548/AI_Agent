@@ -3,7 +3,8 @@
  "quy_uoc": [
   "dem chỉ ghi những loại COCO mà người gắn nhãn thấy RÕ và đếm được chắc chắn. Loại không ghi = không chấm (ví dụ đám đông, vật bị che nhiều, vật quá nhỏ).",
   "dem rỗng {} = ảnh không có vật thể nào trong 80 lớp COCO (tranh, khỉ đột, bướm): dùng để đo model có 'bịa' vật thể không.",
-  "Mỗi ảnh được kiểm sha256 sau khi tải: đổi nội dung là báo lỗi, đáp án không bao giờ lệch ảnh."
+  "Mỗi ảnh được kiểm sha256 sau khi tải: đổi nội dung là báo lỗi, đáp án không bao giờ lệch ảnh.",
+  "dem_ngoai: vật NGOÀI 80 lớp COCO hoặc có thuộc tính (\"người hói đầu\"), dùng cho phần 5 (Gemini, chỉ chạy khi có --gemini vì tốn lượt). Khoá là cụm tiếng Việt đúng như câu hỏi \"Có mấy <cụm>?\"."
  ],
  "nguoi_gan_nhan": "Claude (xem ảnh bằng mắt). CẦN thành viên nhóm xem lại trước khi đưa số liệu ra bảo vệ.",
  "anh": [
@@ -25,6 +26,9 @@
     "person": 1,
     "dog": 1,
     "horse": 1
+   },
+   "dem_ngoai": {
+    "người mặc áo khoác xanh": 1
    }
   },
   {
@@ -39,13 +43,19 @@
    "file": "cv_baboon.jpg",
    "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/baboon.jpg",
    "sha256": "1a1dd18d78eec44420af3b0b7f08ee3d41c982916cae3ce203d7ff35d754cc0f",
-   "dem": {}
+   "dem": {},
+   "dem_ngoai": {
+    "con khỉ": 1
+   }
   },
   {
    "file": "cv_butterfly.jpg",
    "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/butterfly.jpg",
    "sha256": "34a99716b78ded10eae87b4880de739d3e68cc7dd1a96812bb28f469d5eeaea8",
-   "dem": {}
+   "dem": {},
+   "dem_ngoai": {
+    "con bướm": 1
+   }
   },
   {
    "file": "cv_starry_night.jpg",
@@ -83,6 +93,9 @@
    "sha256": "f95f57297fd51a6c5ddceb5ed6916fa759d1d65f402fee34c05b31a9608755c0",
    "dem": {
     "bird": 1
+   },
+   "dem_ngoai": {
+    "con đại bàng": 1
    }
   },
   {
@@ -251,6 +264,9 @@
    "sha256": "356dad2107bb0254e4e4a81bc1d9c7140043e88569d546e5b404b19bffa77d0a",
    "dem": {
     "person": 2
+   },
+   "dem_ngoai": {
+    "người hói đầu": 1
    }
   },
   {
@@ -268,6 +284,9 @@
    "dem": {
     "person": 2,
     "sports ball": 1
+   },
+   "dem_ngoai": {
+    "người mặc áo vàng": 1
    }
   },
   {

@@ -1,10 +1,10 @@
-# Kết quả đánh giá Vision (2026-11-03)
+# Kết quả đánh giá Vision (2026-11-05)
 
 Chạy bằng `python eval/vision/run_eval.py`. ONNX Runtime local, **không gọi Gemini/Groq**.
 
 - Model: `yolo11n.onnx` · conf=0.25 · iou=0.45
 - Bộ ảnh: 30 ảnh có đáp án (44 cặp ảnh–loại), 3 ảnh không có vật COCO
-- Tốc độ: trung vị 51 ms/ảnh trên máy chạy báo cáo (CPU, chưa tính mạng/LLM)
+- Tốc độ: trung vị 73 ms/ảnh trên máy chạy báo cáo (CPU, chưa tính mạng/LLM)
 - **Đáp án đếm do Claude gắn nhãn bằng mắt, chưa có người kiểm lại.** Chỉ gắn những loại thấy rõ và đếm chắc chắn (không gắn đám đông, vật bị che nhiều, vật quá nhỏ). Số liệu dưới đây vì thế dùng cho cảnh "đếm vật rõ ràng", không đại diện cho ảnh đông đúc.
 
 ## 1. Độ chính xác đếm của YOLO
@@ -72,15 +72,16 @@ Theo hướng EXIF (đếm đúng cũ → sau upload):
 
 ## 4. Phân loại chủ đề và hiểu loại vật từ câu hỏi
 
-Chủ đề (hàm `chu_de_tu_cau_hoi`, chạy local, không tốn model): **45/50 = 90.0%** trên 50 câu viết tay.
+Chủ đề (hàm `chu_de_tu_cau_hoi`, chạy local, không tốn model): **52/59 = 88.1%** trên 59 câu viết tay.
 
 | Chủ đề mong đợi | Số câu | Đúng | Tỉ lệ |
 |---|---|---|---|
 | animal | 12 | 9 | 75.0% |
+| chart | 7 | 6 | 85.7% |
 | document | 8 | 8 | 100.0% |
 | food | 7 | 6 | 85.7% |
-| general | 15 | 15 | 100.0% |
-| travel | 8 | 7 | 87.5% |
+| general | 16 | 16 | 100.0% |
+| travel | 9 | 7 | 77.8% |
 
 Câu phân loại sai:
 
@@ -91,8 +92,18 @@ Câu phân loại sai:
 | Con mèo này bao nhiêu tuổi? | animal | general |
 | Bức ảnh này chụp ở đâu? | travel | general |
 | Đĩa này là món Việt hay món Hàn? | food | general |
+| Đường nào tăng nhanh nhất trên đồ thị? | chart | general |
+| Đây là khu đô thị nào? | travel | general |
 
 Loại vật trong câu hỏi (`lop_tu_cau_hoi`): **34/34 = 100.0%** trên 34 câu.
 
 **Lưu ý khi trình bày:** phần 4 đo bước định tuyến chủ đề theo CÂU HỎI (từ khoá). Bước phân loại chủ đề theo NỘI DUNG ẢNH dùng Gemini nên không nằm trong bộ này (tốn lượt). Hai bộ câu hỏi do người viết tay nên là mẫu nhỏ, không phải số đo trên dữ liệu người dùng thật. Riêng `lop_tu_cau_hoi`: bộ 34 câu từng lộ một lỗi ("Đếm số chó và mèo" chỉ ra mèo) và quy tắc đã được sửa sau đó, nên 100% ở đây là con số SAU KHI chỉnh theo chính bộ này, lạc quan hơn so với câu hỏi chưa từng thấy. Phần 2 "hiểu đúng loại" dùng câu hỏi mẫu do người viết biết trước từ khoá nên cũng không độc lập.
+
+## 5. Đếm vật ngoài 80 loại COCO bằng Gemini
+
+Câu hỏi "Có mấy <cụm>?" được chia đúng sang Gemini: **6/6** (đọc câu hỏi, không tốn lượt).
+
+Chưa đo độ chính xác: chạy lại với `--gemini` (tốn 6 lượt Gemini, cần GEMINI/GOOGLE key trong .env).
+
+Mẫu rất nhỏ, đáp án gắn tay: chỉ để minh hoạ tính năng, chưa đủ để kết luận độ chính xác của Gemini.
 

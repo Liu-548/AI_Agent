@@ -15,9 +15,20 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.contracts import tool_error
-from app.agents.vision_agent.prompts import DIRECT_ANSWER_SYSTEM_PROMPT, IMAGE_DESCRIBER_SYSTEM_PROMPT
+from app.agents.vision_agent.prompts import (
+    COMPARE_SYSTEM_PROMPT,
+    DIRECT_ANSWER_SYSTEM_PROMPT,
+    IMAGE_DESCRIBER_SYSTEM_PROMPT,
+)
 from app.agents.vision_agent.image_utils import draw_detections, encode_image, extract_image_ref
-from app.agents.vision_agent.labels import loc_theo_lop, lop_dang_loc, nhan_viet, ten_viet
+from app.agents.vision_agent.labels import (
+    cau_hoi_hien_tai,
+    loc_theo_lop,
+    lop_dang_loc,
+    lop_tu_cau_hoi,
+    nhan_viet,
+    ten_viet,
+)
 from app.agents.vision_agent.topics import khong_dau, loi_dan_hien_tai
 
 
@@ -164,6 +175,63 @@ def tra_loi_truc_tiep(image_ref: str, cau_hoi: str, vision_llm=None) -> str:
     return text
 
 
+# Giới hạn số ảnh trong một lượt so sánh: mỗi ảnh thêm là thêm token, và quá nhiều
+# ảnh thì model dễ nhầm ảnh nào là ảnh nào.
+SO_ANH_SO_SANH_TOI_DA = 4
+
+
+def tra_loi_nhieu_anh(
+    anh: List[tuple],
+    cau_hoi: str,
+    vision_llm=None,
+    so_dem: Optional[dict] = None,
+) -> str:
+    """MỘT lượt model nhìn 2-4 ảnh cùng lúc và trả lời câu hỏi so sánh.
+
+    anh   : [(nhãn, đường dẫn/URL), ...], nhãn là số thứ tự ảnh trong hội thoại (1, 3...)
+    so_dem: {nhãn: {"dog": 2, ...}} số đếm YOLO của từng ảnh (câu hỏi đếm), để model
+            so sánh trên số đo được thay vì tự đếm bằng mắt.
+
+    Khác với gọi từng ảnh rồi ghép: model thấy CÙNG LÚC các ảnh nên so được chi tiết
+    (màu, bố cục, khác biệt nhỏ). Không raise: lỗi trả về `ERROR: ...`.
+    """
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    noi_dung: list = [{"type": "text", "text": cau_hoi or "So sánh các ảnh này."}]
+    for nhan, ref in anh[:SO_ANH_SO_SANH_TOI_DA]:
+        b64, mime = encode_image(ref, get_mime_type=True)
+        if not b64 or not mime:
+            return tool_error("IMAGE_UNREADABLE", f"Không đọc được Ảnh {nhan} ({ref!r}).")
+        image_url: dict = {"url": f"data:{mime};base64,{b64}"}
+        if settings.vision_detail:
+            image_url["detail"] = settings.vision_detail
+        noi_dung.append({"type": "text", "text": f"Ảnh {nhan}:"})
+        noi_dung.append({"type": "image_url", "image_url": image_url})
+    if so_dem:
+        dong = []
+        for nhan, dem in so_dem.items():
+            ta = ", ".join(f"{ten_viet(c)} {n}" for c, n in dem.items()) or "không phát hiện vật nào"
+            dong.append(f"- Ảnh {nhan}: {ta}")
+        noi_dung.append({"type": "text", "text": "Object counts measured by the detector (YOLO):\n" + "\n".join(dong)})
+
+    loi_dan = loi_dan_hien_tai()
+    system_prompt = f"{COMPARE_SYSTEM_PROMPT}\n\n{loi_dan}" if loi_dan else COMPARE_SYSTEM_PROMPT
+    try:
+        llm = vision_llm
+        if llm is None:
+            from app.core.llm import get_llm
+
+            llm = get_llm("describe")
+        text = _message_content_text(
+            llm.invoke([SystemMessage(content=system_prompt), HumanMessage(content=noi_dung)])
+        )
+    except Exception as exc:  # noqa: BLE001
+        return tool_error("VISION_LLM_FAILED", str(exc))
+    if not text:
+        return tool_error("VISION_EMPTY", "Vision model không trả về câu trả lời.")
+    return text
+
+
 def make_image_describer_tool(
     vision_llm=None,
     extractor_llm=None,
@@ -265,6 +333,7 @@ def parse_yolo_results(results: Any) -> dict:
 def make_detect_and_count_tool(
     detector: Optional[Callable[[str], Any]] = None,
     extractor_llm=None,
+    open_vocab_llm=None,
 ):
     """Tạo tool phát hiện + đếm vật thể.
 
@@ -281,6 +350,24 @@ def make_detect_and_count_tool(
             return tool_error(
                 "NO_IMAGE_REF", f"Không tìm thấy đường dẫn hay URL ảnh trong: {text!r}"
             )
+        # Hướng 4: vật ngoài 80 loại COCO ("quả xoài", "người đội mũ bảo hiểm") -> Gemini.
+        from app.agents.vision_agent.gemini_detect import can_dung_gemini, dem_bang_gemini
+
+        cau_hoi = cau_hoi_hien_tai()
+        muc_tieu = can_dung_gemini(cau_hoi) if cau_hoi else None
+        gemini_loi = None
+        if muc_tieu:
+            ket = dem_bang_gemini(ref, muc_tieu, llm=open_vocab_llm)
+            if "error" not in ket:
+                return json.dumps(ket, ensure_ascii=False)
+            if not lop_tu_cau_hoi(muc_tieu):
+                return tool_error(
+                    "OPEN_VOCAB_FAILED",
+                    f"'{muc_tieu}' is not one of the detector's 80 classes and Gemini could not "
+                    f"count it ({ket['error']}). Tell the user it cannot be counted right now.",
+                )
+            # Cụm có loại COCO ("người đội mũ" -> người): YOLO vẫn đếm được loại gốc.
+            gemini_loi = ket["error"]
         try:
             results = run_detector(ref)
         except ImportError:
@@ -322,6 +409,12 @@ def make_detect_and_count_tool(
                 ensure_ascii=False,
             )
         payload["labels_vi"] = nhan_viet(payload["counting"])
+        if gemini_loi:
+            ten = ", ".join(ten_viet(c) for c in payload["counting"])
+            payload["note"] = (
+                f"Gemini failed ({gemini_loi}), so YOLO counted ALL {ten}: it cannot tell which "
+                f"ones are '{muc_tieu}'. Say this clearly instead of presenting it as the answer."
+            )
         # Khung dưới 50% là YOLO "không chắc". Báo riêng để câu trả lời không nói "6" chắc nịch
         # trong khi UI chỉ tính 5 và ghi "+1 không chắc" (xem NGUONG_CHAC trong web/UI_style.html).
         chac = [d for d in payload["detections"] if d["confidence"] >= NGUONG_CHAC]
@@ -331,7 +424,7 @@ def make_detect_and_count_tool(
                 if d["confidence"] < NGUONG_CHAC:
                     ko_chac[d["class"]] = ko_chac.get(d["class"], 0) + 1
             payload["uncertain_counting"] = ko_chac
-            payload["note"] = (
+            payload["note"] = (payload.get("note", "") + " " if payload.get("note") else "") + (
                 f"Detections below {int(NGUONG_CHAC * 100)}% confidence are listed in `uncertain_counting` "
                 "and are still included in `counting`. Report the confident count and mention the "
                 "uncertain ones separately (for example '5, and possibly 1 more'), never as sure."

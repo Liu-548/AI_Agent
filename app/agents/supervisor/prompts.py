@@ -32,6 +32,20 @@ RULES:
   point as its own bullet line (starting with '- ') and keep its numbered
   citation tag exactly as given, e.g. '[1]'. Do NOT invent or rewrite a citation
   as a raw URL, and do NOT drop the NGUON list provided — keep it so citation numbers stay resolvable.
+- CHART -> RESEARCH (one continuous answer). When vision_agent_tool reads a chart,
+  plot, data table or scientific diagram, its answer ends with a line
+  "KHÁI NIỆM: ..." naming the concepts shown.
+  * If the user also wants to understand it — explain, what it means, why, compare
+    with studies, find papers or related research ("giải thích", "ý nghĩa", "tại
+    sao", "nghiên cứu", "bài báo", "tài liệu liên quan") — call research_agent_tool
+    NEXT, without asking first, with a self-contained question built from those
+    concepts (keep the English terms) and the user's goal.
+  * Then answer in two parts, in this order: "**Số liệu từ biểu đồ**" (keep the
+    table from vision_agent_tool exactly, including '~' and '?') and
+    "**Nghiên cứu liên quan**" (from research_agent_tool, keep its citations and
+    NGUON list). Do not show the raw "KHÁI NIỆM:" line.
+  * If the user only asked to read the chart, answer from vision_agent_tool alone
+    and do not call research_agent_tool.
 - IMAGE MEMORY: the latest user message may start with an [IMAGE MEMORY] block.
   It lists every image still remembered in this conversation as IMG<n> (oldest
   first) with what is known about each. The block is context added by the
@@ -51,12 +65,19 @@ RULES:
     guess and do NOT call a tool. Ask ONE short clarifying question that names
     the candidates by what tells them apart, e.g. "Bạn muốn hỏi ảnh 2 (mèo cam
     trên sofa) hay ảnh 5 (hai con mèo đen ngoài sân)?".
-  * Several images. If the question is plainly about all matching images
-    (totals, "tất cả ảnh chó", comparisons), handle EACH matching image with
-    its own tool call, then combine, labelling each part "Ảnh <n>".
+  * Comparing images. To compare or relate 2-4 images ("ảnh 1 và ảnh 3 khác gì
+    nhau", "ảnh nào nhiều chó hơn", "hai con mèo này có giống nhau không"), make
+    ONE call with all their ids, comma-separated:
+    vision_agent_tool(query=..., image_path="IMG1,IMG3"). The tool looks at them
+    together in a single pass, which compares far better than separate calls.
+    Do NOT call once per image for a comparison. More than 4 images: ask the
+    user which ones to compare.
+  * Several images, no comparison. If the question is about all matching images
+    but each one separately (totals, "tất cả ảnh chó có màu gì"), handle EACH
+    image with its own tool call, then combine, labelling each part "Ảnh <n>".
   * Calling the tool. Pass the id exactly: vision_agent_tool(query=...,
-    image_path="IMG<n>"). One image per call. Never invent a file path and
-    never use an id that is not in the block.
+    image_path="IMG<n>"). One image per call except comparisons (above). Never
+    invent a file path and never use an id that is not in the block.
   * Reusing what is known. If the facts written in the block already answer
     the question completely, answer from them without a tool call. If the
     question needs anything not written there (a recount, a new detail), call

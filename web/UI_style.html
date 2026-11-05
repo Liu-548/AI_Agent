@@ -570,6 +570,7 @@ body.gon .route,body.gon .agent-note{display:none;}
 /* Nhãn sát mép phải: neo vào góc phải của khung để không bị cắt chữ. */
 .khung-box.nhan-phai span{left:auto;right:-2px;border-radius:0 0 0 5px;}
 .khung-dong.ko-chac{border-style:dashed;}
+.khung-nguon{font-size:12px;color:var(--muted);line-height:1.5;margin:-4px 0 10px;}
 .khung-dong .tag{font-size:10.5px;color:var(--muted);margin-left:6px;}
 .khung-dong .ten{flex:1;text-align:left;}
 .chip.ko-chac{border-style:dashed;color:var(--muted);}
@@ -706,6 +707,30 @@ body.gon .route,body.gon .agent-note{display:none;}
 }
 .tv-hoi:hover{border-color:var(--vision);}
 .tv-trong{padding:26px 8px;text-align:center;font-size:13px;color:var(--muted);}
+/* Chon 2-4 anh de so sanh trong mot luot (huong 6) */
+.tv-chon{
+  font-family:inherit;font-size:11.5px;color:var(--text-2);cursor:pointer;
+  background:transparent;border:1px dashed var(--border);border-radius:999px;padding:3px 9px;
+}
+.tv-chon[aria-pressed="true"]{border-style:solid;border-color:var(--vision);color:var(--vision);}
+.tv-the.chon{border-color:var(--vision);}
+.tv-nut-ben{display:flex;gap:6px;}
+.tv-ss{display:none;align-items:center;gap:10px;padding:10px 14px 14px;border-top:1px solid var(--border);font-size:12.5px;color:var(--text-2);}
+.tv-ss.show{display:flex;}
+.tv-ss span{flex:1;}
+.tv-ss button{
+  font-family:inherit;font-size:12.5px;font-weight:650;cursor:pointer;border-radius:999px;padding:6px 14px;
+  background:var(--vision);color:#1a1204;border:none;
+}
+.tv-ss button:disabled{opacity:.45;cursor:not-allowed;}
+/* Dai anh da so sanh duoi cau tra loi */
+.ss-ds{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px;}
+.ss-the{flex:0 0 auto;width:120px;display:flex;flex-direction:column;gap:6px;}
+.ss-anh{position:relative;width:120px;height:90px;border-radius:9px;overflow:hidden;background:var(--surface-2);}
+.ss-anh img{width:100%;height:100%;object-fit:cover;display:block;}
+.ss-anh .tv-no{top:5px;left:5px;}
+.ss-dem{font-size:12px;color:var(--text-2);line-height:1.4;}
+.ss-dem b{color:var(--vision);}
 @media (max-width:860px){
   .tv{
     top:auto;left:0;right:0;width:auto;height:78vh;max-width:none;
@@ -896,6 +921,7 @@ body.gon .route,body.gon .agent-note{display:none;}
   </div>
   <div class="tv-ghichu">Hệ thống chỉ nhớ một số ảnh gần nhất của mỗi hội thoại. Mô tả bên dưới là hồ sơ AI đã lập cho từng ảnh.</div>
   <div class="tv-ds" id="tv-ds"></div>
+  <div class="tv-ss" id="tv-ss"><span id="tv-ss-chu"></span><button type="button" id="tv-ss-nut" disabled>So sánh</button></div>
 </aside>
 
 <main class="main">
@@ -1116,6 +1142,7 @@ const MODE_LABEL = { eco: "Tiết kiệm", standard: "Chuẩn", full: "Đầy đ
 const LS_TOKEN = "vaai_token";
 
 const state = {
+  tvChon: new Set(),   // so thu tu cac anh dang chon de so sanh (thu vien anh)
   userId: "",
   apiBase: "",
   token: "",
@@ -1609,8 +1636,10 @@ function htmlKhungVatThe(e, anhNguon) {
   const kt = e.image_size;
   if (!anhNguon || !ds.length || !kt || !(kt[0] > 0) || !(kt[1] > 0)) return "";
   const conf = (d) => Number(d.confidence) || 0;
+  /* Huong 4: vat ngoai 80 loai COCO do Gemini dem -> khong co do tin cay. */
+  const tuGemini = e.detect_source === "gemini";
   // Có ít nhất một khung chắc chắn thì mới tách "không chắc"; toàn khung yếu thì coi như bình thường.
-  const coChac = ds.some((d) => conf(d) >= NGUONG_CHAC);
+  const coChac = !tuGemini && ds.some((d) => conf(d) >= NGUONG_CHAC);
   const kiemChac = (d) => coChac && conf(d) < NGUONG_CHAC;
   const tong = {}, chacTheoLop = {};
   ds.forEach((d) => {
@@ -1626,7 +1655,7 @@ function htmlKhungVatThe(e, anhNguon) {
     dem[c] = (dem[c] || 0) + 1;
     const ko = kiemChac(d);
     const ten = tenVatThe(c, e.ten_viet) + (tong[c] > 1 ? " " + dem[c] : "");
-    const pct = Math.round(conf(d) * 100) + "%";
+    const pct = tuGemini ? "Gemini" : Math.round(conf(d) * 100) + "%";
     const b = d.bbox || [0, 0, 0, 0];
     const x = Math.max(0, b[0] / kt[0] * 100), y = Math.max(0, b[1] / kt[1] * 100);
     const w = Math.min(100 - x, (b[2] - b[0]) / kt[0] * 100), h = Math.min(100 - y, (b[3] - b[1]) / kt[1] * 100);
@@ -1642,7 +1671,10 @@ function htmlKhungVatThe(e, anhNguon) {
     .filter(([c]) => chacTheoLop[c])
     .map(([c]) => '<span class="chip"><b>' + chacTheoLop[c] + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase()) + "</span>").join("");
   if (soKo) chips += '<span class="chip ko-chac"><b>+' + soKo + "</b> không chắc</span>";
-  return '<div class="panel khung" data-khung><h2>Vật thể phát hiện</h2><div class="khung-hang">' +
+  return '<div class="panel khung" data-khung><h2>Vật thể phát hiện' + (tuGemini ? " · Gemini" : "") + "</h2>" +
+    (tuGemini ? '<div class="khung-nguon">"' + escapeHtml(e.detect_target || "") +
+      '" nằm ngoài 80 loại YOLO biết nên Gemini đếm thay. Gemini không cho độ tin cậy; ảnh đông có thể sót hoặc trùng.</div>' : "") +
+    '<div class="khung-hang">' +
     '<div class="khung-anh"><img src="' + anhNguon + '" alt="Ảnh đã gửi"><div class="khung-lop">' + khung + "</div></div>" +
     '<div class="khung-ben"><div class="khung-so"><b data-khung-so>' + soChac + "</b><span>vật thể" +
     (soKo ? " · +" + soKo + " không chắc" : "") + " · chạm để làm nổi bật</span></div>" +
@@ -1705,6 +1737,7 @@ function htmlTraLoi(answer, extras, anhNguon) {
       '<button type="button" data-speak="1" aria-pressed="false">Đọc to</button>' +
     '</div><div class="tom-tat" aria-live="polite"></div></div>';
 
+  html += htmlSoSanh(e);
   const khungVatThe = htmlKhungVatThe(e, anhNguon);
   if (khungVatThe) html += khungVatThe;
   if (!khungVatThe && e.counting && Object.keys(e.counting).length) {
@@ -2023,9 +2056,10 @@ const CHIP_ANH = [
   { nhan: "Đếm vật thể", q: "Trong ảnh có mấy con vật và chúng màu gì?", icon: "M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M9 9h6v6H9z" },
   { nhan: "Đây là loài/giống gì?", q: "Đây là loài hoặc giống gì?", icon: "M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z" },
   { nhan: "Đọc chữ trong ảnh", q: "Đọc toàn bộ chữ có trong ảnh.", icon: "M4 7V4h16v3M9 20h6M12 4v16" },
+  { nhan: "Đọc biểu đồ + nghiên cứu", q: "Đọc số liệu trong biểu đồ này thành bảng, rồi tìm nghiên cứu liên quan để giải thích.", icon: "M3 3v18h18M7 15l4-4 3 3 5-6" },
   { nhan: "Tìm bài báo liên quan", q: "Mô tả ảnh rồi tìm bài báo về chủ đề này.", icon: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5V21h16" },
 ];
-const TEN_CHU_DE = { animal: "động vật", travel: "du lịch", food: "ẩm thực", document: "tài liệu", general: "chung" };
+const TEN_CHU_DE = { animal: "động vật", travel: "du lịch", food: "ẩm thực", document: "tài liệu", chart: "biểu đồ", general: "chung" };
 
 function veChipAnh() {
   $("chips-anh").innerHTML = CHIP_ANH.map((c, i) =>
@@ -2042,6 +2076,7 @@ function capNhatChipAnh() {
 
 async function napThuVien() {
   const cid = state.currentId;
+  if (cid !== state.tvCuaHoiThoai) { state.tvChon.clear(); state.tvCuaHoiThoai = cid; }
   state.anh = [];
   if (cid) {
     try {
@@ -2050,6 +2085,12 @@ async function napThuVien() {
     } catch (e) { state.anh = []; }
   }
   if (cid !== state.currentId) return;
+  /* Dai anh so sanh ve truoc khi thu vien tai xong (mo lai hoi thoai cu): dien anh vao. */
+  document.querySelectorAll(".ss-anh[data-ss-n]").forEach((o) => {
+    if (o.querySelector("img")) return;
+    const a = state.anh.find((x) => Number(x.stt) === Number(o.dataset.ssN));
+    if (a && a.thumb_base64) o.insertAdjacentHTML("afterbegin", '<img src="data:image/jpeg;base64,' + a.thumb_base64 + '" alt="Ảnh ' + a.stt + '">');
+  });
   const co = state.anh.length > 0;
   $("btn-thuvien").hidden = !co;
   $("tv-so").textContent = state.anh.length;
@@ -2068,13 +2109,67 @@ function veThuVien() {
     const anh = a.con_anh && a.thumb_base64
       ? '<img src="data:image/jpeg;base64,' + a.thumb_base64 + '" alt="Ảnh ' + a.stt + '">'
       : '<span class="tv-gone">File đã dọn</span>';
+    const daChon = state.tvChon.has(Number(a.stt));
     const nut = a.con_anh
-      ? '<button type="button" class="tv-hoi" data-tv-hoi="' + a.stt + '">Hỏi về ảnh này</button>'
+      ? '<span class="tv-nut-ben"><button type="button" class="tv-chon" data-tv-chon="' + a.stt + '" aria-pressed="' + daChon +
+        '">' + (daChon ? "✓ So sánh" : "+ So sánh") + '</button>' +
+        '<button type="button" class="tv-hoi" data-tv-hoi="' + a.stt + '">Hỏi</button></span>'
       : '<button type="button" class="tv-hoi" data-tv-lai="' + a.stt + '">Gửi lại ảnh</button>';
-    return '<div class="tv-the"><div class="tv-anh">' + anh + '<span class="tv-no">Ảnh ' + a.stt + "</span></div>" +
+    return '<div class="tv-the' + (daChon ? " chon" : "") + '"><div class="tv-anh">' + anh + '<span class="tv-no">Ảnh ' + a.stt + "</span></div>" +
       '<div class="tv-thong"><div class="tv-t1">' + escapeHtml(tieuDe) + '</div><div class="tv-mt">' + escapeHtml(mota) +
       '</div><div class="tv-chan">' + (tag ? '<span class="tv-tag">' + tag + "</span>" : "<span></span>") + nut + "</div></div></div>";
   }).join("");
+  capNhatThanhSoSanh();
+}
+
+/* So sanh nhieu anh (huong 6): chon 2-4 anh trong thu vien -> dien san cau hoi. */
+const SO_ANH_SO_SANH_TOI_DA = 4;
+function capNhatThanhSoSanh() {
+  const ds = [...state.tvChon].sort((a, b) => a - b);
+  $("tv-ss").classList.toggle("show", ds.length > 0);
+  $("tv-ss-chu").textContent = ds.length < 2
+    ? "Chọn thêm " + (2 - ds.length) + " ảnh để so sánh"
+    : "Đã chọn ảnh " + ds.join(", ");
+  $("tv-ss-nut").disabled = ds.length < 2;
+}
+function chonSoSanh(stt) {
+  const n = Number(stt);
+  if (state.tvChon.has(n)) state.tvChon.delete(n);
+  else if (state.tvChon.size < SO_ANH_SO_SANH_TOI_DA) state.tvChon.add(n);
+  veThuVien();
+}
+function hoiSoSanh() {
+  const ds = [...state.tvChon].sort((a, b) => a - b);
+  if (ds.length < 2) return;
+  dongThuVien();
+  const ten = ds.slice(0, -1).map((n) => "ảnh " + n).join(", ") + " và ảnh " + ds[ds.length - 1];
+  const ta = $("question");
+  const conLai = ta.value.replace(/^(Ảnh \d+:|So sánh [^:]*:)\s*/, "");
+  ta.value = "So sánh " + ten + ": " + (conLai || "khác nhau ở điểm nào?");
+  state.tvChon.clear();
+  tuGianTextarea();
+  capNhatNutGui();
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+/* Duoi cau tra loi so sanh: dai anh da dua vao cung mot luot model (+ so dem YOLO). */
+function htmlSoSanh(e) {
+  const ds = e.compared_images || [];
+  if (ds.length < 2) return "";
+  const dem = e.counts_per_image || {};
+  const the = ds.map((n) => {
+    const a = (state.anh || []).find((x) => Number(x.stt) === Number(n));
+    const anh = a && a.thumb_base64 ? '<img src="data:image/jpeg;base64,' + a.thumb_base64 + '" alt="Ảnh ' + n + '">' : "";
+    const d = dem[String(n)];
+    const soDem = d ? (Object.keys(d).length
+      ? Object.entries(d).map(([c, so]) => "<b>" + so + "</b> " + escapeHtml(tenVatThe(c, e.ten_viet).toLowerCase())).join(", ")
+      : "không thấy vật cần đếm") : "";
+    return '<div class="ss-the"><div class="ss-anh" data-ss-n="' + Number(n) + '">' + anh + '<span class="tv-no">Ảnh ' + n + "</span></div>" +
+      (soDem ? '<div class="ss-dem">' + soDem + "</div>" : "") + "</div>";
+  }).join("");
+  return '<div class="panel"><h2>So sánh ' + ds.length + " ảnh trong một lượt" + (Object.keys(dem).length ? " · số đếm YOLO" : "") +
+    '</h2><div class="ss-ds">' + the + "</div></div>";
 }
 
 function moThuVien() {
@@ -2224,10 +2319,13 @@ function ganSuKien() {
 
   /* --- thu vien anh --- */
   $("btn-thuvien").onclick = moThuVien;
+  $("tv-ss-nut").onclick = hoiSoSanh;
   $("tv-dong").onclick = dongThuVien;
   $("tv-nen").onclick = dongThuVien;
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") dongThuVien(); });
   $("tv-ds").addEventListener("click", (e) => {
+    const chon = e.target.closest("[data-tv-chon]");
+    if (chon) { chonSoSanh(chon.dataset.tvChon); return; }
     const hoi = e.target.closest("[data-tv-hoi]");
     if (hoi) { hoiVeAnh(hoi.dataset.tvHoi); return; }
     const lai = e.target.closest("[data-tv-lai]");

@@ -54,10 +54,11 @@ images later. Reply with ONE JSON object and nothing else, using exactly these k
 - "topic": exactly one of "animal" (pets, wildlife, birds, fish...), "travel" \
 (landmarks, tourist places, landscapes, cityscapes), "food" (dishes, drinks, \
 ingredients), "document" (text-heavy: receipts, forms, slides, screenshots, signs), \
-"general" (anything else)
+"chart" (charts, plots, data tables, scientific figures and diagrams), "general" \
+(anything else)
 
 Write every value in Vietnamese WITH full diacritics, at most 12 words each, EXCEPT \
-"topic", which must be one of the five English words above.
+"topic", which must be one of the six English words above.
 Describe only what is visible. If something cannot be determined, use ""."""
 
 

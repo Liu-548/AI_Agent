@@ -200,6 +200,42 @@
   {
    "q": "Tôi nên chụp lại ảnh này thế nào cho đẹp?",
    "mong_doi": "general"
+  },
+  {
+   "q": "Đọc số liệu trong biểu đồ này",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Biểu đồ này nói lên điều gì?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Trục tung của biểu đồ là gì?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Chuyển bảng số liệu trong ảnh thành bảng",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Sơ đồ khối này hoạt động thế nào?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Giải thích sơ đồ khoa học này",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Đường nào tăng nhanh nhất trên đồ thị?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Đây là khu đô thị nào?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Số đo các cạnh trong ảnh là bao nhiêu?",
+   "mong_doi": "general"
   }
  ],
  "loai_vat": [

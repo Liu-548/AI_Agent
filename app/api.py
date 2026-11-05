@@ -266,6 +266,21 @@ def _research_extras(result: dict, answer: str, response: dict) -> None:
         response["link_map"] = links
 
 
+def _so_sanh_extras(result: dict, response: dict) -> None:
+    """Luot so sanh nhieu anh (huong 6): them `compared_images` ([1, 3]) va so dem YOLO
+    cua tung anh (neu cau hoi la cau dem) de UI hien dai anh da so sanh."""
+    for ten, _noi_dung, artifact in _tool_messages(result):
+        if ten == "vision_agent_tool" and isinstance(artifact, dict) and artifact.get("compared_images"):
+            response["compared_images"] = [int(x) for x in artifact["compared_images"]]
+            if artifact.get("counts_per_image"):
+                response["counts_per_image"] = {
+                    str(k): v for k, v in artifact["counts_per_image"].items()
+                }
+                response["ten_viet"] = nhan_viet(
+                    {c for dem in artifact["counts_per_image"].values() for c in dem}
+                )
+
+
 def _extract_vision_extras(tool_outputs: Dict[str, str], response: dict) -> None:
     """Doc ket qua cua detect_and_count_objects (neu co trong tool_outputs) va
     them counting/detections/annotated_image_base64 vao response, sua truc
@@ -280,6 +295,9 @@ def _extract_vision_extras(tool_outputs: Dict[str, str], response: dict) -> None
         return
     response["counting"] = payload.get("counting", {})
     response["detections"] = payload.get("detections", [])
+    if payload.get("source"):  # "gemini": vat ngoai 80 loai COCO (huong 4)
+        response["detect_source"] = payload["source"]
+        response["detect_target"] = payload.get("target", "")
     annotated = payload.get("annotated_image")
     if annotated and Path(annotated).exists():
         response["annotated_image_base64"] = base64.b64encode(
@@ -311,6 +329,11 @@ def _bo_sung_khung_yolo(saved_path, question: str, response: dict) -> None:
 
             if not can_dem_vat_the(question):
                 return
+            from app.agents.vision_agent.gemini_detect import can_dung_gemini
+
+            if can_dung_gemini(question):
+                # Vat ngoai 80 loai (qua xoai...): YOLO ve khung loai khac chi gay hieu nham.
+                return
             payload = parse_yolo_results(default_detector(str(saved_path)))
             if not payload["counting"]:
                 return
@@ -319,7 +342,8 @@ def _bo_sung_khung_yolo(saved_path, question: str, response: dict) -> None:
 
         # Loc theo loai ma cau hoi nhac toi (idempotent: ket qua da loc thi loc lai khong doi).
         loai_can = lop_tu_cau_hoi(question)
-        if loai_can and response.get("detections") is not None:
+        tu_gemini = response.get("detect_source") == "gemini"  # nhan la cum tu, khong phai lop COCO
+        if loai_can and not tu_gemini and response.get("detections") is not None:
             da_loc = loc_theo_lop(
                 {"counting": response.get("counting", {}), "detections": response["detections"]},
                 loai_can,
@@ -1076,7 +1100,9 @@ def ask_supervisor(
             response["agent_answers"] = agent_answers
         _extract_vision_extras(tool_outputs, response)
         _research_extras(result, answer, response)
-        _bo_sung_khung_yolo(saved_path, question, response)
+        _so_sanh_extras(result, response)
+        if "compared_images" not in response:
+            _bo_sung_khung_yolo(saved_path, question, response)
 
         warnings = [
             _canh_bao_de_doc(name, text)

@@ -28,6 +28,7 @@ import re
 import tempfile
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -1071,6 +1072,27 @@ def ask_research(
 # (vision_agent.tools.SO_ANH_SO_SANH_TOI_DA).
 SO_ANH_MOI_LUOT_TOI_DA = 5
 
+# Nguoi dung bam "Dung": trinh duyet bo cho, nhung luot dang chay tren server KHONG
+# ngat giua chung duoc (dang goi model). Ghi lai ma luot de khi chay xong thi BO ket qua,
+# khong luu cau hoi viet lon vao lich su (no se bi gui kem lam ngu canh cho cau sau).
+_LUOT_DA_HUY: "OrderedDict[str, float]" = OrderedDict()
+_SO_LUOT_HUY_GIU = 500
+
+
+def _danh_dau_huy(ma: str) -> None:
+    _LUOT_DA_HUY[ma] = time.time()
+    while len(_LUOT_DA_HUY) > _SO_LUOT_HUY_GIU:
+        _LUOT_DA_HUY.popitem(last=False)
+
+
+@app.post("/api/ask/cancel")
+def huy_luot_hoi(request_id: str = Form(..., description="Ma luot do trinh duyet tao khi gui")):
+    """Bam Dung: danh dau luot nay de server bo ket qua, khong luu vao lich su."""
+    ma = (request_id or "").strip()[:80]
+    if ma:
+        _danh_dau_huy(ma)
+    return {"cancelled": ma}
+
 
 @app.post("/api/ask")
 def ask_supervisor(
@@ -1090,6 +1112,7 @@ def ask_supervisor(
     ),
     video_times: str = Form("", description='Thoi diem (giay) cua tung khung, JSON vd "[0,1,2]"'),
     video_duration: float = Form(0.0, description="Do dai video (giay), toi da 30"),
+    request_id: str = Form("", description="Ma luot do trinh duyet tao; bam Dung -> /api/ask/cancel"),
     authorization: Optional[str] = Header(None),
 ):
     """Di qua Supervisor, co nho ngu canh cua chinh hoi thoai do.
@@ -1282,6 +1305,12 @@ def ask_supervisor(
         ]
         if warnings:
             response["warnings"] = warnings
+
+        ma_luot = (request_id or "").strip()[:80]
+        if ma_luot and ma_luot in _LUOT_DA_HUY:
+            # Nguoi dung da bam Dung (thuong la de sua cau hoi): khong luu gi ca.
+            _LUOT_DA_HUY.pop(ma_luot, None)
+            return {"cancelled": True, "answer": ""}
 
         if luu_lich_su:
             if hoi_thoai is None:

@@ -510,6 +510,8 @@ body.gon .route,body.gon .agent-note{display:none;}
 .err.da-dung{border-color:var(--border);background:var(--surface);color:var(--text-2);}
 .err.da-dung .thu-lai{color:var(--text);border-color:var(--border);}
 .err.da-dung .thu-lai:hover{background:var(--surface-2);}
+.err .nut-hang{display:flex;gap:8px;flex-wrap:wrap;}
+.err .thu-lai.sua{border-color:var(--accent,#7c6cf2);}
 
 /* ---- hoat anh cho rieng cua Research: danh sach buoc tu tick ---- */
 .cho.cho-rs{border-left-color:var(--research);padding-top:17px;position:relative;}
@@ -2246,6 +2248,23 @@ function chayCho(cho, coAnh) {
   return () => clearInterval(id);
 }
 
+/* Dua cau hoi + dinh kem cua mot luot da dung tro lai o nhap de sua. */
+function suaLaiCauHoi(cauHoi, dsFile, video) {
+  const ta = $("question");
+  ta.value = cauHoi || "";
+  dsFileDinhKem = (dsFile || []).slice();
+  videoDinhKem = video || null;
+  veFileDinhKem();
+  tuGianTextarea();
+  capNhatNutGui();
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+function maLuotMoi() {
+  return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
 async function gui(cauHoi, dsFile, video) {
   if (state.sending) return;
   /* dsFile: mang anh (0-5). Goi kieu cu gui(q, file) van chay. video: xem tachKhungVideo. */
@@ -2278,6 +2297,8 @@ async function gui(cauHoi, dsFile, video) {
   const body = new FormData();
   body.append("question", cauHoi);
   body.append("user_id", state.userId);
+  state.maLuot = maLuotMoi();
+  body.append("request_id", state.maLuot);
   if (state.currentId) body.append("conversation_id", state.currentId);
   else if (state.projectMoi) body.append("project_id", state.projectMoi);
   if (video) {
@@ -2291,6 +2312,7 @@ async function gui(cauHoi, dsFile, video) {
 
   try {
     const data = await api("/api/ask", { method: "POST", body: body, signal: state.boDung.signal });
+    if (data && data.cancelled) throw Object.assign(new Error("cancelled"), { name: "AbortError" });
     const dots = turn.querySelector(".cho");
     const { answer, ...extras } = data;
     /* __videoUrl chi de ve giao dien luot nay (phat lai video goc), khong luu. */
@@ -2323,12 +2345,22 @@ async function gui(cauHoi, dsFile, video) {
       hop.appendChild(Object.assign(document.createElement("div"), {
         textContent: daDung ? "Đã dừng chờ câu trả lời." : e.message,
       }));
+      /* "Sua cau hoi": dua cau hoi + anh/video da dinh kem tro lai o nhap de sua roi
+         gui tiep (bam Dung vi lo viet nham). "Thu lai": gui y nguyen. */
+      const nutSua = document.createElement("button");
+      nutSua.type = "button";
+      nutSua.className = "thu-lai sua";
+      nutSua.textContent = "✎ Sửa câu hỏi";
+      nutSua.onclick = () => { turn.remove(); suaLaiCauHoi(cauHoi, dsFile, video); };
       const nut = document.createElement("button");
       nut.type = "button";
       nut.className = "thu-lai";
       nut.textContent = "Thử lại";
       nut.onclick = () => { turn.remove(); gui(cauHoi, dsFile, video); };
-      hop.appendChild(nut);
+      const hang = document.createElement("div");
+      hang.className = "nut-hang";
+      hang.append(nutSua, nut);
+      hop.appendChild(hang);
       dots.replaceWith(hop);
     }
   } finally {
@@ -2918,7 +2950,16 @@ function ganSuKien() {
 
   $("form").addEventListener("submit", (e) => {
     e.preventDefault();
-    if (state.sending) { if (state.boDung) state.boDung.abort(); return; }
+    if (state.sending) {
+      /* Dung: bo cho phia trinh duyet VA bao server bo ket qua luot nay (khong luu lich su). */
+      if (state.maLuot) {
+        const huy = new FormData();
+        huy.append("request_id", state.maLuot);
+        api("/api/ask/cancel", { method: "POST", body: huy }).catch(() => {});
+      }
+      if (state.boDung) state.boDung.abort();
+      return;
+    }
     const q = ta.value.trim();
     if (!q) return;
     const f = dsFileDinhKem.slice();

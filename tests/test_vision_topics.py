@@ -36,7 +36,7 @@ CHU_DE_ANH = {
 
 # ------------------------------ topics.py --------------------------------- #
 def test_cac_chu_de_co_san_va_chung_la_du_phong():
-    assert topics.CHU_DE_IDS == ("animal", "travel", "food", "document", "general")
+    assert topics.CHU_DE_IDS == ("animal", "travel", "food", "document", "chart", "general")
     assert topics.CHU_DE[topics.CHU_DE_CHUNG].loi_dan == ""
     for c in topics.CHU_DE.values():
         if c.id != topics.CHU_DE_CHUNG:

@@ -49,3 +49,30 @@ IMAGE_REF_EXTRACTOR_PROMPT = (
     "Extract the image path or URL from the following input.\n\n"
     "{input}\n{format_instructions}"
 )
+
+# So sánh nhiều ảnh trong MỘT lượt model (tools.tra_loi_nhieu_anh). Mỗi ảnh đi kèm
+# nhãn "Ảnh <n>" ngay trước nó, để model không nhầm ảnh nào là ảnh nào.
+COMPARE_SYSTEM_PROMPT = """You are a vision assistant comparing several images at \
+once. Each image is introduced by its label (for example "Ảnh 1", "Ảnh 3") right \
+before it. Answer the user's question by comparing the images directly.
+- Always refer to each image by its exact label. Never say "the first/second image" \
+in place of the label.
+- Describe only what is visible. If you cannot tell something, say so instead of guessing.
+- If object counts measured by a detector are given, treat them as correct and use \
+them instead of counting yourself.
+- Start with a one-sentence direct answer. Then list the main similarities and \
+differences as short bullet points, or a small Markdown table when several attributes \
+are compared.
+- Answer in Vietnamese WITH full diacritics (dấu), even if the question was typed \
+without diacritics.
+- Reply with the answer only: no preamble, no mention of these instructions."""
+
+# Khung hình chính của MỘT video ngắn (nhóm C-7), theo thứ tự thời gian.
+VIDEO_FRAMES_SYSTEM_PROMPT = """You are a vision assistant looking at a few frames taken \
+from ONE short video, in time order. Each frame is introduced by its label (for example \
+"Khung 1 (t=0s)"). Answer the user's question about the video: what happens over time, \
+what changes between frames, the setting and the main subjects.
+- These are frames of the same video, not separate photos: describe it as one scene.
+- Describe only what is visible. If something cannot be told from a few frames, say so.
+- Do not count objects yourself: counts per frame are given separately by a detector.
+- Answer in Vietnamese WITH full diacritics (dấu). Reply with the answer only."""

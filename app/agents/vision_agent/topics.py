@@ -37,11 +37,13 @@ CHU_DE = {
         ChuDe(
             "animal",
             "động vật",
-            "TOPIC FOCUS - animals: name the species (and the breed only if you can tell "
-            "it with reasonable confidence), say how many animals are visible, their "
-            "colors and markings, what they are doing, and the setting. If the species "
-            "is uncertain, give your best guess and say clearly that it is uncertain "
-            "instead of stating it as fact.",
+            "TOPIC FOCUS - animals: START with the number of animals of each kind as a plain "
+            "count of individuals (for example '2 dogs and 1 horse'); never write 'one species' "
+            "or 'one kind' in place of a count. Then name the species (and the breed only if "
+            "you can tell it with reasonable confidence), their colors and markings, what they "
+            "are doing, and the setting. If the animals do not look alike, do not claim they "
+            "are all the same breed. If the species or breed is uncertain, give your best "
+            "guess and say clearly that it is uncertain instead of stating it as fact.",
             ("loai gi", "con gi", "giong gi", "giong cho", "giong meo", "con vat", "dong vat"),
         ),
         ChuDe(
@@ -94,12 +96,41 @@ CHU_DE = {
                 "noi dung chu",
             ),
         ),
+        ChuDe(
+            "chart",
+            "biểu đồ",
+            "TOPIC FOCUS - charts and scientific figures: say what kind of figure it is "
+            "(bar/line/pie chart, scatter plot, data table, flowchart, scientific diagram) and "
+            "its title. For a chart: give the axes with their units and the legend, then a "
+            "Markdown table of the data values you can actually read (prefix estimated values "
+            "with '~', write '?' for any value you cannot read; never invent numbers), then 1-2 "
+            "sentences on the main trend or comparison. For a diagram: list its parts and how "
+            "they connect. End with TWO last lines exactly in this form: 'ĐIỂM NỔI BẬT: <the "
+            "2-4 most striking specific points of THIS figure, each with its value and "
+            "label/period, e.g. đỉnh 81,8% năm 1991; tăng vọt 2008 (23,1%)>' and then "
+            "'KHÁI NIỆM: <1-3 key scientific concepts shown, each in Vietnamese with the "
+            "English term in parentheses>' so research can be looked up for exactly this figure.",
+            (
+                "bieu do",
+                "chart",
+                "graph",
+                "bang so lieu",
+                "doc so lieu",
+                "so do khoi",
+                "so do quy trinh",
+                "so do khoa hoc",
+                "so do tu duy",
+                "truc tung",
+                "truc hoanh",
+            ),
+        ),
         ChuDe(CHU_DE_CHUNG, "chung", ""),
     )
 }
 
 # Lưu ý khi thêm từ khoá: so khớp là KHÔNG DẤU nên "chó này" và "chỗ này" đều thành
 # "cho nay". Tránh các cụm dễ đụng nhau như vậy, và test sẽ bắt nếu lỡ thêm.
+# Ví dụ đã cố ý KHÔNG dùng: "do thi" (đồ thị / đô thị), "so do" trơn (sơ đồ / số đo / sổ đỏ).
 
 # Chủ đề mà bước lập hồ sơ ảnh được phép trả về, theo đúng thứ tự trong prompt.
 CHU_DE_IDS = tuple(CHU_DE)

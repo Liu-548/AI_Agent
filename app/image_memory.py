@@ -54,10 +54,11 @@ images later. Reply with ONE JSON object and nothing else, using exactly these k
 - "topic": exactly one of "animal" (pets, wildlife, birds, fish...), "travel" \
 (landmarks, tourist places, landscapes, cityscapes), "food" (dishes, drinks, \
 ingredients), "document" (text-heavy: receipts, forms, slides, screenshots, signs), \
-"general" (anything else)
+"chart" (charts, plots, data tables, scientific figures and diagrams), "general" \
+(anything else)
 
 Write every value in Vietnamese WITH full diacritics, at most 12 words each, EXCEPT \
-"topic", which must be one of the five English words above.
+"topic", which must be one of the six English words above.
 Describe only what is visible. If something cannot be determined, use ""."""
 
 
@@ -195,14 +196,16 @@ def _dong_danh_muc(anh: dict) -> str:
     return " | ".join(phan)
 
 
-def khoi_danh_muc(ds_anh: List[dict], so_moi: Optional[int] = None) -> str:
+def khoi_danh_muc(ds_anh: List[dict], so_moi=None) -> str:
     """Khối chữ liệt kê các ảnh còn được nhớ. Rỗng nếu hội thoại chưa có ảnh nào.
 
-    `so_moi`: số thứ tự của ảnh đính kèm NGAY lượt này (chưa có hồ sơ).
+    `so_moi`: số thứ tự (một số, hoặc danh sách khi gửi nhiều ảnh một lượt) của ảnh
+    đính kèm NGAY lượt này (chưa có hồ sơ).
     """
     dong = [_dong_danh_muc(a) for a in ds_anh]
-    if so_moi is not None:
-        dong.append(f"{bi_danh(so_moi)} | attached to the CURRENT message, not analysed yet")
+    ds_moi = [] if so_moi is None else ([so_moi] if isinstance(so_moi, int) else list(so_moi))
+    for so in ds_moi:
+        dong.append(f"{bi_danh(so)} | attached to the CURRENT message, not analysed yet")
     if not dong:
         return ""
     return "\n".join(

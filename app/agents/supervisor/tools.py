@@ -12,7 +12,8 @@ from app.agents.research_agent.agent import build_research_agent
 from app.agents.vision_agent.agent import build_vision_agent
 from app.agents.vision_agent.image_utils import extract_image_ref
 from app.agents.vision_agent.tools import can_dem_vat_the, tra_loi_truc_tiep
-from app.agents.vision_agent.topics import chon_chu_de, dung_chu_de
+from app.agents.vision_agent.labels import dung_cau_hoi
+from app.agents.vision_agent.topics import chon_chu_de, dung_chu_de, khong_dau
 from app.core.contracts import tool_error
 
 # Bí danh ảnh trong bộ nhớ hội thoại: "IMG3" (xem app/image_memory.py). Tầng web
@@ -116,6 +117,142 @@ def so_bi_danh(query: str, image_path: Optional[str]) -> Optional[int]:
     return int(khop.group(1)) if khop else None
 
 
+_SO_SANH_SO_LUONG_RE = re.compile(
+    r"\b(?:nhieu|it|dong)\b.*\bhon\b|\bbang nhau\b|\bchenh\b|\bmore\b|\bfewer\b|\bless\b"
+)
+
+
+# Câu hỏi có ý SO SÁNH / liên hệ các ảnh với nhau (viết không dấu). Gửi nhiều ảnh
+# KHÔNG đồng nghĩa với so sánh: không có ý này thì trả lời từng ảnh riêng.
+_SO_SANH_RE = re.compile(
+    r"\b(?:so sanh|doi chieu|khac (?:gi|nhau|biet|nhu the nao|o diem nao|cho nao)|"
+    r"diem khac|giong (?:nhau|khong|gi|nhu)|co giong|giong .* khong|cung (?:loai|mot|giong|loai)|"
+    r"(?:anh|tam|buc) nao\b|ca hai|hai anh nay|cac anh nay deu|"
+    r"compare|comparison|difference|differ|same|similar|which (?:image|one|photo))\b"
+)
+
+
+def la_cau_so_sanh(query: str) -> bool:
+    """Câu hỏi có muốn so sánh / liên hệ các ảnh không (đếm "nhiều hơn" cũng tính)."""
+    chuan = khong_dau(query or "")
+    return bool(_SO_SANH_RE.search(chuan) or _SO_SANH_SO_LUONG_RE.search(chuan))
+
+
+def tra_loi_tung_anh(query: str, ds_so: list, config: Optional[dict]):
+    """Nhiều ảnh nhưng câu hỏi KHÔNG đòi so sánh: hỏi từng ảnh riêng, ghép theo nhãn.
+
+    Mỗi ảnh đi đúng đường một ảnh như bình thường (đường nhanh / YOLO / Gemini).
+    Không trả artifact khung vật thể: giao diện chỉ vẽ khung khi có MỘT ảnh.
+    """
+    from app.agents.vision_agent.tools import SO_ANH_SO_SANH_TOI_DA
+
+    phan = []
+    for so in ds_so[:SO_ANH_SO_SANH_TOI_DA]:
+        ket = vision_tool.func(query, f"IMG{so}", config=config)
+        noi_dung = ket[0] if isinstance(ket, tuple) else ket
+        phan.append(f"**Ảnh {so}:** {noi_dung}")
+    return "\n\n".join(phan), {"per_image": ds_so[:SO_ANH_SO_SANH_TOI_DA]}
+
+
+# Số bí danh dành cho khung hình chính của video (app/api.py đặt IMG901, IMG902...).
+SO_KHUNG_VIDEO_DAU = 901
+
+
+def xem_khung_video(query: str, ds_so: list, config: Optional[dict]):
+    """Nhóm C-7: một lượt model nhìn các khung chính của video, theo thứ tự thời gian."""
+    from app.agents.vision_agent.prompts import VIDEO_FRAMES_SYSTEM_PROMPT
+    from app.agents.vision_agent.tools import tra_loi_nhieu_anh
+
+    giai = ((config or {}).get("configurable") or {}).get("image_resolver")
+    anh = []
+    for i, so in enumerate(sorted(ds_so)):
+        duong_dan = giai(so) if giai is not None else None
+        if not duong_dan:
+            return tool_error("IMAGE_NOT_IN_MEMORY", f"Video keyframe IMG{so} is not available."), {}
+        anh.append((i + 1, duong_dan))
+    tra_loi = tra_loi_nhieu_anh(
+        anh, query, system_prompt=VIDEO_FRAMES_SYSTEM_PROMPT, tien_to="Khung"
+    )
+    return tra_loi, {}
+
+
+def cac_bi_danh(query: str, image_path: Optional[str]) -> list:
+    """Mọi số ảnh được nhắc tới (giữ thứ tự, bỏ trùng): "IMG1,IMG3", "1, 3", "IMG1 và IMG3".
+
+    Lấy cả trong image_path lẫn query, vì supervisor đôi khi để một mã ở image_path
+    và mã kia trong câu hỏi ("so sánh với IMG3").
+    """
+    so: list = []
+    for phan in re.split(r"[,;|&]|\bva\b|\bvà\b|\band\b", image_path or ""):
+        khop = _BI_DANH_RE.search(phan) or _CHI_SO_RE.match(phan)
+        if khop:
+            so.append(int(khop.group(1)))
+    so += [int(k.group(1)) for k in _BI_DANH_RE.finditer(query or "")]
+    return list(dict.fromkeys(so))
+
+
+def so_sanh_nhieu_anh(query: str, ds_so: list, config: Optional[dict]):
+    """Hướng 6: so sánh 2-5 ảnh trong MỘT lượt model (thay vì gọi riêng từng ảnh rồi ghép).
+
+    Câu hỏi đếm ("ảnh nào nhiều chó hơn") thì đếm từng ảnh bằng YOLO trước (miễn phí)
+    rồi đưa số đếm cho model, vì model nhìn ảnh đếm không đáng tin bằng YOLO.
+    Trả (câu trả lời, artifact) như các tool content_and_artifact khác.
+    """
+    from app.agents.vision_agent.labels import loc_theo_lop, lop_tu_cau_hoi
+    from app.agents.vision_agent.tools import (
+        SO_ANH_SO_SANH_TOI_DA,
+        default_detector,
+        parse_yolo_results,
+        tra_loi_nhieu_anh,
+    )
+
+    giai = ((config or {}).get("configurable") or {}).get("image_resolver")
+    if giai is None:
+        return tool_error(
+            "NO_IMAGE_MEMORY",
+            "Comparing images needs the conversation image memory (IMG ids); "
+            "ask the user to send the images in one conversation.",
+        ), {}
+    ds_so = ds_so[:SO_ANH_SO_SANH_TOI_DA]
+    anh = []
+    for so in ds_so:
+        duong_dan = giai(so)
+        if not duong_dan:
+            return tool_error(
+                "IMAGE_NOT_IN_MEMORY",
+                f"IMG{so} is not available any more. Use only ids listed in IMAGE MEMORY.",
+            ), {}
+        anh.append((so, duong_dan))
+
+    so_dem = None
+    loai = lop_tu_cau_hoi(query)
+    # Câu so sánh số lượng ("ảnh nào nhiều chó hơn") không có chữ "bao nhiêu/đếm" nhưng
+    # vẫn là câu đếm.
+    so_luong = bool(loai) and bool(_SO_SANH_SO_LUONG_RE.search(khong_dau(query)))
+    if can_dem_vat_the(query) or so_luong:
+        try:
+            so_dem = {
+                so: loc_theo_lop(parse_yolo_results(default_detector(p)), loai)["counting"]
+                for so, p in anh
+            }
+        except Exception:  # noqa: BLE001 - thiếu YOLO: vẫn so sánh được, chỉ không có số đếm
+            so_dem = None
+
+    # Chủ đề: câu hỏi chỉ thẳng tới chủ đề nào thì dùng; không thì chỉ dùng chủ đề của
+    # ảnh khi MỌI ảnh cùng một chủ đề (ảnh chó so với ảnh món ăn thì để "chung").
+    chu_de = None
+    from app.core import config as app_config
+
+    if app_config.settings.vision_topics:
+        cua_anh = {giai.chu_de(so) if hasattr(giai, "chu_de") else None for so in ds_so}
+        chu_de = chon_chu_de(query, cua_anh.pop() if len(cua_anh) == 1 else None)
+    with dung_chu_de(chu_de):
+        tra_loi = tra_loi_nhieu_anh(anh, query, so_dem=so_dem)
+    if tra_loi.startswith("ERROR:"):
+        return tra_loi, {}
+    return tra_loi, {"compared_images": ds_so, "counts_per_image": so_dem or {}}
+
+
 def chon_chu_de_cho_anh(query: str, so_anh: Optional[int], config: Optional[dict]) -> Optional[str]:
     """Chủ đề cho lượt nhìn ảnh này; None khi VISION_TOPICS tắt (hành vi như cũ)."""
     from app.core import config as app_config
@@ -171,6 +308,38 @@ def thu_tra_loi_truc_tiep(query: str, image_path: Optional[str]) -> Optional[str
     return None if ket_qua.startswith("ERROR:") else ket_qua
 
 
+def thu_dem_bang_gemini(query: str, image_path: Optional[str], config: Optional[dict]) -> Optional[str]:
+    """Hướng 4, đường tắt: câu đếm vật NGOÀI 80 loại COCO ("có mấy quả xoài").
+
+    Gọi thẳng tool đếm (bên trong nó gọi Gemini MỘT lượt) thay vì chạy vision agent
+    ReAct (thêm 2 lượt model chỉ để quyết định gọi tool). Kết quả thô được ghi vào
+    tool_sink như khi agent tự gọi, để web UI vẽ khung. None = không phải loại câu này.
+    """
+    from app.agents.vision_agent.gemini_detect import can_dung_gemini, tra_loi_tu_payload
+    from app.agents.vision_agent.tools import make_detect_and_count_tool
+
+    if not can_dem_vat_the(query) or not can_dung_gemini(query):
+        return None
+    ref = image_path or extract_image_ref(query)
+    if not ref:
+        return None
+    ket = make_detect_and_count_tool().invoke({"text": ref})
+    kho = ((config or {}).get("configurable") or {}).get("tool_sink")
+    if kho is not None:
+        kho["detect_and_count_objects"] = ket
+    if ket.startswith("ERROR:"):
+        return ket
+    import json
+
+    payload = json.loads(ket)
+    if payload.get("source") == "gemini":
+        return tra_loi_tu_payload(payload)
+    # Gemini lỗi, YOLO đếm loại gốc: đưa nguyên số đếm + ghi chú cho supervisor diễn đạt.
+    return json.dumps(
+        {k: payload[k] for k in ("counting", "labels_vi", "note") if k in payload}, ensure_ascii=False
+    )
+
+
 def giai_bi_danh_anh(
     query: str, image_path: Optional[str], config: Optional[dict]
 ) -> Tuple[Optional[str], Optional[str]]:
@@ -215,8 +384,24 @@ def vision_tool(
     """Useful for analyzing images, object detection/counting with YOLO, or visual description.
     Input should be a clear query describing what to analyze or detect.
     `image_path` is the image to look at: an id from IMAGE MEMORY such as "IMG3",
-    or a file path / URL exactly as the user gave it. One image per call.
+    or a file path / URL exactly as the user gave it. One image per call, EXCEPT when
+    the user asks to COMPARE 2-5 remembered images: then pass all their ids in one
+    call, comma-separated, e.g. image_path="IMG1,IMG3".
     """
+    # Nhiều ảnh: CHỈ so sánh khi câu hỏi có ý so sánh; không thì trả lời từng ảnh riêng.
+    ds_so = cac_bi_danh(query, image_path)
+    # Khung hình chính của video (IMG901+): xem cùng lúc như MỘT cảnh theo thời gian.
+    if ds_so and all(so >= SO_KHUNG_VIDEO_DAU for so in ds_so):
+        return xem_khung_video(query, ds_so, config)
+    if len(ds_so) >= 2:
+        # Xét câu hỏi GỐC của người dùng (supervisor có thể tự viết lại thành "so sánh"
+        # dù người dùng không hề hỏi vậy). Không có câu gốc (CLI, test cũ) -> xét query.
+        cau_goc = ((config or {}).get("configurable") or {}).get("user_question") or query
+        if la_cau_so_sanh(cau_goc):
+            return so_sanh_nhieu_anh(query, ds_so, config)
+        # Hỏi từng ảnh bằng chính câu của người dùng (không phải câu supervisor viết lại).
+        return tra_loi_tung_anh(cau_goc, ds_so, config)
+
     so_anh = so_bi_danh(query, image_path)
     image_path, loi = giai_bi_danh_anh(query, image_path, config)
     if loi:
@@ -229,7 +414,12 @@ def vision_tool(
 
     # Chủ đề ảnh: lời dặn riêng cho lượt nhìn ảnh (xem topics.py). Không có chủ đề
     # trong hồ sơ (khách vãng lai, ảnh cũ) thì chỉ dựa vào câu hỏi, rồi đến "chung".
-    with dung_chu_de(chon_chu_de_cho_anh(query, so_anh, config)):
+    # dung_cau_hoi: để detect_and_count_objects chỉ trả loại vật thể mà câu hỏi nhắm tới.
+    with dung_chu_de(chon_chu_de_cho_anh(query, so_anh, config)), dung_cau_hoi(query):
+        # Hướng 4: đếm vật ngoài 80 loại COCO bằng Gemini, một lượt.
+        dem_gemini = thu_dem_bang_gemini(query, image_path, config)
+        if dem_gemini is not None:
+            return dem_gemini, {}
         # Đường nhanh: một lượt model nhìn ảnh và trả lời luôn (xem VISION_DIRECT).
         nhanh = thu_tra_loi_truc_tiep(query, image_path)
         if nhanh is not None:

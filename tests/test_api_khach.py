@@ -107,6 +107,87 @@ def test_khach_van_hoi_duoc_nhung_khong_luu_gi(monkeypatch, tmp_path):
     assert so_hoi_thoai == 0
 
 
+def test_agent_options_tra_model_da_cau_hinh_khong_lo_api_key(monkeypatch, tmp_path):
+    api_mod, _, _ = _nap(monkeypatch, tmp_path)
+    client = TestClient(api_mod.app)
+
+    r = client.get("/api/agent-options")
+
+    assert r.status_code == 200
+    options = r.json()["options"]
+    assert {item["agent"] for item in options} == {
+        "supervisor",
+        "research_agent",
+        "vision_agent",
+    }
+    assert {
+        item["agent"]: item["model"] for item in options
+    } == {
+        agent: api_mod._model_spec_for_agent(agent)
+        for agent in ("supervisor", "research_agent", "vision_agent")
+    }
+    assert all("api_key" not in item for item in options)
+
+
+@pytest.mark.parametrize(
+    ("agent", "factory_name"),
+    (("research_agent", "_get_research_graph"), ("vision_agent", "_get_vision_graph")),
+)
+def test_chon_agent_goi_dung_graph_va_luu_metadata(
+    monkeypatch, tmp_path, agent, factory_name
+):
+    api_mod, auth_mod, _ = _nap(monkeypatch, tmp_path)
+    invocations = []
+
+    class _GraphDaChon:
+        @staticmethod
+        def invoke(state, config=None):
+            invocations.append(state)
+            return {"messages": []}
+
+    monkeypatch.setattr(api_mod, factory_name, lambda: _GraphDaChon)
+    client = TestClient(api_mod.app)
+
+    r = client.post(
+        "/api/ask",
+        data={"question": "Xin chao", "agent": agent},
+        headers=_bearer(auth_mod, A),
+    )
+
+    assert r.status_code == 200
+    assert len(invocations) == 1
+    assert r.json()["selected_agent"] == agent
+    assert r.json()["selected_model"] == api_mod._model_spec_for_agent(agent)
+    assert r.json()["agents_used"] == [agent]
+
+    conversation = client.get(
+        f"/api/conversations/{r.json()['conversation_id']}",
+        headers=_bearer(auth_mod, A),
+    ).json()
+    assistant_message = conversation["messages"][-1]
+    assert assistant_message["extras"]["selected_agent"] == agent
+    assert (
+        assistant_message["extras"]["selected_model"]
+        == api_mod._model_spec_for_agent(agent)
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    (
+        {"question": "Xin chao", "agent": "unknown_agent"},
+        {"question": "Xin chao", "agent": "research_agent", "model": "unconfigured/model"},
+    ),
+)
+def test_tu_choi_agent_hoac_model_khong_hop_le(monkeypatch, tmp_path, data):
+    api_mod, _, _ = _nap(monkeypatch, tmp_path)
+    client = TestClient(api_mod.app)
+
+    r = client.post("/api/ask", data=data)
+
+    assert r.status_code == 422
+
+
 def test_khach_tu_khai_user_id_cung_khong_luu(monkeypatch, tmp_path):
     """Client tự gửi user_id để 'ép' server lưu -> phải bị bỏ qua hoàn toàn."""
     api_mod, _, store_mod = _nap(monkeypatch, tmp_path)

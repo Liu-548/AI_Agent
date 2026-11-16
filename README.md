@@ -143,7 +143,7 @@ Bốn lệnh đầu **không tốn lượt API nào** — luôn chạy chúng tr
 .\chay.ps1 -Test        # phải xanh 100%
 .\chay.ps1 -Graph       # state graph phải đủ node
 ```
-
+   
 Năm ca nghiệm thu theo tài liệu gốc, xếp từ rẻ đến đắt:
 
 ```powershell

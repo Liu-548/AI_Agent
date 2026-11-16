@@ -90,6 +90,17 @@ _vision_graph = None
 _research_graph = None
 _supervisor_graph = None
 
+_AGENT_MODEL_ROLES = {
+    "supervisor": "supervisor",
+    "research_agent": "research",
+    "vision_agent": "vision",
+}
+
+
+def _model_spec_for_agent(agent: str) -> str:
+    role = _AGENT_MODEL_ROLES[agent]
+    return getattr(settings, f"model_{role}")
+
 
 def _get_vision_graph():
     global _vision_graph
@@ -872,6 +883,8 @@ def ask_supervisor(
     conversation_id: str = Form("", description="De trong = mo hoi thoai moi"),
     project_id: str = Form("", description="Chi dung khi mo hoi thoai moi: tao luon trong project nay"),
     research_mode: str = Form("", description="eco | standard | full - de trong = theo RESEARCH_MODE cua server. Chi co tac dung khi RESEARCH_ARCH=topics"),
+    agent: str = Form("supervisor", description="supervisor, research_agent, hoac vision_agent"),
+    model: str = Form("", description="Model spec dang duoc cau hinh cho agent da chon"),
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
     ),
@@ -900,6 +913,18 @@ def ask_supervisor(
     hoi_thoai: Optional[dict] = None
 
     try:
+        if agent not in _AGENT_MODEL_ROLES:
+            raise HTTPException(
+                status_code=422,
+                detail="Agent không hợp lệ. Chọn supervisor, research_agent hoặc vision_agent.",
+            )
+        selected_model = _model_spec_for_agent(agent)
+        if model and model != selected_model:
+            raise HTTPException(
+                status_code=422,
+                detail="Model không khớp với cấu hình hiện tại của agent đã chọn.",
+            )
+
         if file is not None and file.filename:
             saved_path = _save_upload(file)
 
@@ -959,7 +984,17 @@ def ask_supervisor(
             # Khach vang lai: khong luu gi nen khong co bo nho anh, giu cach cu.
             message = f"{question}\nImage: {saved_path}"
 
-        graph = _get_supervisor_graph()
+        # Vision Agent nhận đường dẫn ảnh trực tiếp; IMG<n> chỉ được giải mã
+        # trong các tool của Supervisor.
+        if agent == "vision_agent" and saved_path is not None:
+            message = f"{question}\nImage: {saved_path}"
+
+        if agent == "research_agent":
+            graph = _get_research_graph()
+        elif agent == "vision_agent":
+            graph = _get_vision_graph()
+        else:
+            graph = _get_supervisor_graph()
         result = graph.invoke(
             {"messages": lich_su + [{"role": "user", "content": message}]},
             config=run_config,
@@ -969,9 +1004,18 @@ def ask_supervisor(
         # Ket qua tool cua agent con (vd detect_and_count_objects) chi co trong tool_sink.
         for ten, noi_dung in tool_sink.items():
             tool_outputs.setdefault(ten, noi_dung)
-        agents_used, agent_answers = _extract_agent_trace(result)
 
-        response: dict = {"answer": answer, "agents_used": agents_used}
+        if agent == "supervisor":
+            agents_used, agent_answers = _extract_agent_trace(result)
+        else:
+            agents_used, agent_answers = [agent], {}
+
+        response: dict = {
+            "answer": answer,
+            "agents_used": agents_used,
+            "selected_agent": agent,
+            "selected_model": selected_model,
+        }
         if "research_agent" in agents_used and settings.research_arch == "topics":
             # Che do THUC SU da dung cho luot nay (de UI hien, va de kiem chung nut chon).
             response["research_mode"] = che_do or settings.research_mode
@@ -1031,6 +1075,17 @@ def ask_supervisor(
         raise
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=_loi_ro_rang(exc)) from exc
+
+
+@app.get("/api/agent-options")
+def agent_options():
+    """Expose selectable agent names and their configured model specs, no API keys."""
+    return {
+        "options": [
+            {"agent": agent, "model": _model_spec_for_agent(agent)}
+            for agent in _AGENT_MODEL_ROLES
+        ]
+    }
 
 
 # --------------------------------------------------------------------------- #

@@ -98,6 +98,24 @@ body.sidebar-hidden .sidebar{margin-left:-280px;}
 .logo svg{width:17px;height:17px;}
 .side-title{font-size:14px;font-weight:650;letter-spacing:-.01em;flex:1;}
 .side-title small{display:block;font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.02em;}
+.agent-picker{padding:8px 14px 12px;}
+.agent-picker label{
+  display:block;margin:0 0 6px;color:var(--muted);
+  font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;
+}
+.agent-picker select{
+  display:block;width:100%;min-width:0;padding:10px 34px 10px 11px;
+  border:1px solid var(--border);border-radius:10px;
+  background:var(--surface);color:var(--text);
+  font-family:inherit;font-size:12.5px;font-weight:500;line-height:1.35;
+  outline:none;cursor:pointer;
+}
+.agent-picker select:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);}
+.agent-picker select:disabled{opacity:.65;cursor:wait;}
+.agent-picker option{background:var(--surface);color:var(--text);}
+.route-model{
+  color:var(--muted);font-size:11.5px;overflow-wrap:anywhere;
+}
 
 .icon-btn{
   width:32px;height:32px;min-width:32px;border-radius:9px;
@@ -609,6 +627,15 @@ body.gon .route,body.gon .agent-note{display:none;}
     </button>
   </div>
 
+  <div class="agent-picker">
+    <label for="agent-select">Agent / Chế độ</label>
+    <select id="agent-select" aria-label="Chọn agent" disabled>
+      <option value="supervisor">🤖 Supervisor (Tự động định tuyến - Mặc định)</option>
+      <option value="research_agent">🔬 Research Agent (Chuyên văn bản)</option>
+      <option value="vision_agent">👁️ Vision Agent (Chuyên đọc ảnh)</option>
+    </select>
+  </div>
+
   <button class="new-btn" id="btn-new" type="button">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
     Cuộc trò chuyện mới
@@ -993,6 +1020,20 @@ function dangXuat(giuNguyenManHinh) {
   if (!giuNguyenManHinh) toast("Đã đăng xuất.");
 }
 
+async function napLuaChonAgent() {
+  const data = await api("/api/agent-options");
+  const modelByAgent = new Map(
+    (data.options || []).map((item) => [item.agent, item.model])
+  );
+  const select = $("agent-select");
+  for (const option of select.options) {
+    const model = modelByAgent.get(option.value);
+    if (!model) throw new Error("Server không trả model cho agent " + option.value);
+    option.dataset.model = model;
+  }
+  select.disabled = false;
+}
+
 /* Google tra ve ID token o day sau khi nguoi dung chon tai khoan. */
 async function nhanTokenGoogle(resp) {
   $("login-err").textContent = "";
@@ -1287,13 +1328,21 @@ function htmlSoAnh(soAnh) {
   return soAnh ? '<span class="img-no">Ảnh ' + Number(soAnh) + "</span>" : "";
 }
 
+
 function htmlBubbleUser(noiDung, anhBase64, soAnh) {
   return '<div class="bubble-user">' + escapeHtml(noiDung) +
     (anhBase64 ? '<img src="data:image/jpeg;base64,' + anhBase64 + '" alt="Ảnh đã gửi">' + htmlSoAnh(soAnh) : "") + "</div>";
 }
 
-function htmlTuyenDuong(agentsUsed, trace, cheDo) {
+
+function htmlTuyenDuong(agentsUsed, selectedAgent, selectedModel) {
   const pill = (cls, text) => '<span class="pill ' + cls + '"><span class="led"></span>' + text + "</span>";
+  if (selectedAgent && selectedAgent !== "supervisor") {
+    const label = AGENT_LABEL[selectedAgent] || selectedAgent;
+    const cls = AGENT_CLASS[selectedAgent] || "supervisor";
+    return '<div class="route">' + pill(cls, label) +
+      '<span class="route-model">⚡ Model: ' + escapeHtml(selectedModel || "cấu hình hiện tại") + "</span></div>";
+  }
   let h = pill("supervisor", "Supervisor");
   if (!agentsUsed || !agentsUsed.length) {
     h += '<span class="sep">→</span>' + pill("supervisor", "Tự trả lời");
@@ -1308,7 +1357,9 @@ function htmlTuyenDuong(agentsUsed, trace, cheDo) {
     });
     h += '<span class="sep">→</span>' + pill("supervisor", "Tổng hợp");
   }
-  return '<div class="route">' + h + "</div>";
+  return '<div class="route">' + h +
+    (selectedModel ? '<span class="route-model">⚡ Model điều phối: ' + escapeHtml(selectedModel) + "</span>" : "") +
+    "</div>";
 }
 
 /* Agent chu de nao da chay, voi cau hoi con nao, ket qua ra sao - de nguoi cham
@@ -1332,8 +1383,8 @@ function htmlTraLoi(answer, extras) {
   if (e.warnings && e.warnings.length) {
     html += '<div class="warn">' + e.warnings.map(escapeHtml).join("<br>") + "</div>";
   }
-  html += htmlTuyenDuong(e.agents_used, e.research_trace, e.research_mode);
-  html += htmlTrace(e.research_trace);
+  html += htmlTuyenDuong(e.agents_used, e.selected_agent, e.selected_model);
+
 
   const tra = e.agent_answers || {};
   (e.agents_used || []).forEach((n) => {
@@ -1423,10 +1474,15 @@ const NHIP_CHO = [
   "Đang tổng hợp câu trả lời...",
 ];
 
-async function gui(cauHoi, file) {
+async function gui(cauHoi, file, agentSelection = null) {
   if (state.sending) return;
   state.sending = true;
   $("btn-send").disabled = true;
+  const selectedOption = $("agent-select").selectedOptions[0];
+  const selected = agentSelection || {
+    agent: $("agent-select").value || "supervisor",
+    model: selectedOption?.dataset.model || "",
+  };
 
   hienManChao(false);
   const thread = $("thread");
@@ -1450,7 +1506,9 @@ async function gui(cauHoi, file) {
   body.append("question", cauHoi);
   body.append("user_id", state.userId);
   if (state.currentId) body.append("conversation_id", state.currentId);
-  else if (state.projectMoi) body.append("project_id", state.projectMoi);
+
+  body.append("agent", selected.agent);
+  if (selected.model) body.append("model", selected.model);
   if (file) body.append("file", file);
   const cheDo = $("research-mode");
   if (!cheDo.disabled) body.append("research_mode", cheDo.value);
@@ -1483,7 +1541,7 @@ async function gui(cauHoi, file) {
       nut.type = "button";
       nut.className = "thu-lai";
       nut.textContent = "Thử lại";
-      nut.onclick = () => { turn.remove(); gui(cauHoi, file); };
+      nut.onclick = () => { turn.remove(); gui(cauHoi, file, selected); };
       hop.appendChild(nut);
       dots.replaceWith(hop);
     }
@@ -1973,6 +2031,11 @@ async function luuMove() {
   datCoChu(coChu);
   ganSuKien();
   capNhatNutGui();
+  try {
+    await napLuaChonAgent();
+  } catch (e) {
+    toast("Không tải được danh sách agent; chat vẫn dùng Supervisor.");
+  }
 
   /* Hoi server: co bat dang nhap khong, va phieu dang giu con dung khong.
      Server quyet dinh, khong phai trinh duyet - de khong ai tat dang nhap bang

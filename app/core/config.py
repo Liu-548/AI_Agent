@@ -243,6 +243,12 @@ class Settings:
 
     # --- Runtime ---
     recursion_limit: int = field(default_factory=lambda: _env_int("RECURSION_LIMIT", 50))
+    supervisor_max_calls_per_agent: int = field(
+        default_factory=lambda: _env_int("SUPERVISOR_MAX_CALLS_PER_AGENT", 3)
+    )
+    supervisor_max_total_calls: int = field(
+        default_factory=lambda: _env_int("SUPERVISOR_MAX_TOTAL_CALLS", 6)
+    )
 
     # --- Lưu trữ hội thoại (chỉ web UI dùng, CLI không đụng tới) ---
     #

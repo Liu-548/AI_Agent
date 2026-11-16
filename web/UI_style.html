@@ -1376,6 +1376,20 @@ function htmlTrace(trace) {
     "</ul></details>";
 }
 
+/* Agent chu de nao da chay, voi cau hoi con nao, ket qua ra sao - de nguoi cham
+   thay duoc kien truc multi-agent ngay tren giao dien. */
+function htmlTrace(trace) {
+  if (!trace || !trace.length) return "";
+  const trangThai = { ok: "có kết quả", no_data: "không đủ dữ liệu", error: "lỗi" };
+  return '<details class="trace"><summary>Chi tiết tra cứu (' + trace.length + " lượt agent chủ đề)</summary><ul>" +
+    trace.map((t) => "<li><b>" + escapeHtml(TOPIC_LABEL[t.topic] || t.topic) + "</b> — " + escapeHtml(t.sub_question || "") +
+      " · " + (trangThai[t.status] || escapeHtml(t.status || "")) +
+      (t.usage && t.usage.llm_calls ? " · " + t.usage.llm_calls + " lượt LLM" : "") +
+      (t.usage && t.usage.elapsed_ms ? " · " + (t.usage.elapsed_ms / 1000).toFixed(1) + "s" : "") +
+      (t.removed ? " · đã lược " + t.removed + " câu không có nguồn" : "") + "</li>").join("") +
+    "</ul></details>";
+}
+
 function htmlTraLoi(answer, extras) {
   const e = extras || {};
   let html = "";

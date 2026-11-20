@@ -1335,7 +1335,7 @@ function htmlBubbleUser(noiDung, anhBase64, soAnh) {
 }
 
 
-function htmlTuyenDuong(agentsUsed, selectedAgent, selectedModel) {
+function htmlTuyenDuong(agentsUsed, selectedAgent, selectedModel,trace, cheDo) {
   const pill = (cls, text) => '<span class="pill ' + cls + '"><span class="led"></span>' + text + "</span>";
   if (selectedAgent && selectedAgent !== "supervisor") {
     const label = AGENT_LABEL[selectedAgent] || selectedAgent;
@@ -1397,7 +1397,9 @@ function htmlTraLoi(answer, extras) {
   if (e.warnings && e.warnings.length) {
     html += '<div class="warn">' + e.warnings.map(escapeHtml).join("<br>") + "</div>";
   }
-  html += htmlTuyenDuong(e.agents_used, e.selected_agent, e.selected_model);
+   const trace = e.research_trace || e.trace || [];
+  html += htmlTuyenDuong(e.agents_used, e.selected_agent, e.selected_model, trace, e.research_mode || e.cheDo);
+  html += htmlTrace(trace);
 
 
   const tra = e.agent_answers || {};

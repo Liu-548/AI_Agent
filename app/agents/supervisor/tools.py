@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import inspect
-import logging
 import re
-import time
-from typing import Any
+from typing import Any, Optional, Tuple
 
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -17,7 +14,8 @@ from app.agents.supervisor.budget import budget_from_config
 from app.agents.vision_agent.agent import build_vision_agent
 from app.agents.vision_agent.image_utils import extract_image_ref
 from app.agents.vision_agent.tools import can_dem_vat_the, tra_loi_truc_tiep
-from app.agents.vision_agent.topics import chon_chu_de, dung_chu_de
+from app.agents.vision_agent.labels import dung_cau_hoi
+from app.agents.vision_agent.topics import chon_chu_de, dung_chu_de, khong_dau
 from app.core.contracts import tool_error
 
 _LOGGER = logging.getLogger(__name__)
@@ -100,68 +98,13 @@ def reset_sub_agent_instances():
     _research_agent_theo_che_do.clear()
 
 
-def _loi_agent(agent_name: str, code: str, message: str, error_type: str) -> tuple[str, dict]:
-    _LOGGER.warning(
-        "Supervisor sub-agent failed: agent=%s error_type=%s",
-        agent_name,
-        error_type,
-    )
-    return tool_error(code, message), {}
-
-
-def _la_loi_tam_thoi(error: Exception) -> bool:
-    if isinstance(error, (TimeoutError, ConnectionError)):
-        return True
-    return any(
-        cls.__name__ in _TRANSIENT_ERROR_NAMES
-        and cls.__module__.startswith(
-            ("aiohttp", "google.api_core", "httpcore", "httpx", "requests", "urllib3")
-        )
-        for cls in type(error).__mro__
-    )
-
-
-def _giu_ngan_sach(agent_name: str, config: dict | None) -> str | None:
-    budget = budget_from_config(config)
-    allowed, reason, _, _ = budget.reserve(agent_name)
-    if allowed:
-        return None
-    if reason == "agent":
-        return tool_error(
-            "CALL_BUDGET_AGENT_LIMIT",
-            f"Đã đạt giới hạn gọi agent {agent_name} trong lượt này. "
-            "Hãy tổng hợp từ thông tin hiện có.",
-        )
-    return tool_error(
-        "CALL_BUDGET_TOTAL_LIMIT",
-        "Đã đạt tổng giới hạn gọi agent trong lượt này. "
-        "Hãy kết thúc và trả lời dựa trên thông tin hiện có.",
-    )
-
-
-def _invoke_agent(agent, state: dict, config: dict | None):
-    """Truyền config khi agent hỗ trợ tham số đó; giữ tương thích với fake cũ."""
-    invoke = agent.invoke
-    try:
-        parameters = inspect.signature(invoke).parameters.values()
-    except (TypeError, ValueError):
-        return invoke(state, config=config)
-    if any(
-        parameter.name == "config"
-        or parameter.kind is inspect.Parameter.VAR_KEYWORD
-        for parameter in parameters
-    ):
-        return invoke(state, config=config)
-    return invoke(state)
-
-
-def _chay_agent_con(
-    agent,
-    query: str,
-    config: dict | None = None,
-    budget_reserved: bool = False,
-):
+def _chay_agent_con(agent, query: str, config: Optional[dict] = None):
     """Chạy agent con, trả (câu trả lời cuối, artifact cho web UI).
+
+    Đây là nơi DUY NHẤT supervisor chạm vào agent con, nên mọi lớp bảo vệ nằm ở đây:
+    kiểm tra agent hợp lệ -> xin ngân sách (CallBudget) -> gọi kèm config của lượt cha
+    (thử lại 1 lần nếu lỗi tạm thời) -> kiểm tra state trả về -> gom artifact. Lỗi KHÔNG
+    raise mà trả chuỗi "ERROR: ..." có cấu trúc (IF-05) để supervisor tự xử lý.
 
     artifact KHÔNG gửi cho LLM của supervisor (response_format="content_and_artifact"),
     chỉ nằm trong ToolMessage.artifact để app/api.py đọc: kết quả tool bên trong
@@ -170,55 +113,11 @@ def _chay_agent_con(
     """
     from app.core.pretty import message_text
 
-    agent_name = (
-        getattr(agent, "name", None)
-        or getattr(agent, "__name__", None)
-        or type(agent).__name__
-    )
-    if not callable(getattr(agent, "invoke", None)):
-        return _loi_agent(
-            agent_name,
-            "SUB_AGENT_INVALID",
-            f"Agent {agent_name} không có phương thức invoke hợp lệ.",
-            "InvalidAgentError",
-        )
-    if not budget_reserved:
-        budget_error = _giu_ngan_sach(agent_name, config)
-        if budget_error:
-            return budget_error, {}
-
-    result = None
-    for attempt in range(2):
-        try:
-            result = _invoke_agent(agent, {"messages": [("user", query)]}, config)
-            break
-        except Exception as exc:  # noqa: BLE001 - chuyển lỗi agent thành kết quả tool rõ ràng
-            if attempt == 0 and _la_loi_tam_thoi(exc):
-                _LOGGER.warning(
-                    "Retrying transient supervisor sub-agent error: agent=%s error_type=%s",
-                    agent_name,
-                    type(exc).__name__,
-                )
-                time.sleep(_RETRY_BACKOFF_SECONDS)
-                continue
-            return _loi_agent(
-                agent_name,
-                "SUB_AGENT_ERROR",
-                f"Agent {agent_name} thất bại sau {attempt + 1} lần gọi "
-                f"({type(exc).__name__}).",
-                type(exc).__name__,
-            )
-
-    if not isinstance(result, dict) or not result.get("messages"):
-        return _loi_agent(
-            agent_name,
-            "SUB_AGENT_EMPTY_STATE",
-            f"Agent {agent_name} trả về state rỗng hoặc không hợp lệ.",
-            "EmptyAgentStateError",
-        )
-
+    result = agent.invoke({"messages": [("user", query)]})
     chuyen_ket_qua_tool_con(result, config)
-    messages = result["messages"]
+    messages = result.get("messages", []) if isinstance(result, dict) else []
+    if not messages:
+        return str(result), {}
     tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
     topics, bang_chung = [], []
     for m in tool_msgs:
@@ -247,6 +146,142 @@ def so_bi_danh(query: str, image_path: str | None) -> int | None:
     else:
         khop = _BI_DANH_RE.search(query or "")
     return int(khop.group(1)) if khop else None
+
+
+_SO_SANH_SO_LUONG_RE = re.compile(
+    r"\b(?:nhieu|it|dong)\b.*\bhon\b|\bbang nhau\b|\bchenh\b|\bmore\b|\bfewer\b|\bless\b"
+)
+
+
+# Câu hỏi có ý SO SÁNH / liên hệ các ảnh với nhau (viết không dấu). Gửi nhiều ảnh
+# KHÔNG đồng nghĩa với so sánh: không có ý này thì trả lời từng ảnh riêng.
+_SO_SANH_RE = re.compile(
+    r"\b(?:so sanh|doi chieu|khac (?:gi|nhau|biet|nhu the nao|o diem nao|cho nao)|"
+    r"diem khac|giong (?:nhau|khong|gi|nhu)|co giong|giong .* khong|cung (?:loai|mot|giong|loai)|"
+    r"(?:anh|tam|buc) nao\b|ca hai|hai anh nay|cac anh nay deu|"
+    r"compare|comparison|difference|differ|same|similar|which (?:image|one|photo))\b"
+)
+
+
+def la_cau_so_sanh(query: str) -> bool:
+    """Câu hỏi có muốn so sánh / liên hệ các ảnh không (đếm "nhiều hơn" cũng tính)."""
+    chuan = khong_dau(query or "")
+    return bool(_SO_SANH_RE.search(chuan) or _SO_SANH_SO_LUONG_RE.search(chuan))
+
+
+def tra_loi_tung_anh(query: str, ds_so: list, config: Optional[dict]):
+    """Nhiều ảnh nhưng câu hỏi KHÔNG đòi so sánh: hỏi từng ảnh riêng, ghép theo nhãn.
+
+    Mỗi ảnh đi đúng đường một ảnh như bình thường (đường nhanh / YOLO / Gemini).
+    Không trả artifact khung vật thể: giao diện chỉ vẽ khung khi có MỘT ảnh.
+    """
+    from app.agents.vision_agent.tools import SO_ANH_SO_SANH_TOI_DA
+
+    phan = []
+    for so in ds_so[:SO_ANH_SO_SANH_TOI_DA]:
+        ket = vision_tool.func(query, f"IMG{so}", config=config)
+        noi_dung = ket[0] if isinstance(ket, tuple) else ket
+        phan.append(f"**Ảnh {so}:** {noi_dung}")
+    return "\n\n".join(phan), {"per_image": ds_so[:SO_ANH_SO_SANH_TOI_DA]}
+
+
+# Số bí danh dành cho khung hình chính của video (app/api.py đặt IMG901, IMG902...).
+SO_KHUNG_VIDEO_DAU = 901
+
+
+def xem_khung_video(query: str, ds_so: list, config: Optional[dict]):
+    """Nhóm C-7: một lượt model nhìn các khung chính của video, theo thứ tự thời gian."""
+    from app.agents.vision_agent.prompts import VIDEO_FRAMES_SYSTEM_PROMPT
+    from app.agents.vision_agent.tools import tra_loi_nhieu_anh
+
+    giai = ((config or {}).get("configurable") or {}).get("image_resolver")
+    anh = []
+    for i, so in enumerate(sorted(ds_so)):
+        duong_dan = giai(so) if giai is not None else None
+        if not duong_dan:
+            return tool_error("IMAGE_NOT_IN_MEMORY", f"Video keyframe IMG{so} is not available."), {}
+        anh.append((i + 1, duong_dan))
+    tra_loi = tra_loi_nhieu_anh(
+        anh, query, system_prompt=VIDEO_FRAMES_SYSTEM_PROMPT, tien_to="Khung"
+    )
+    return tra_loi, {}
+
+
+def cac_bi_danh(query: str, image_path: Optional[str]) -> list:
+    """Mọi số ảnh được nhắc tới (giữ thứ tự, bỏ trùng): "IMG1,IMG3", "1, 3", "IMG1 và IMG3".
+
+    Lấy cả trong image_path lẫn query, vì supervisor đôi khi để một mã ở image_path
+    và mã kia trong câu hỏi ("so sánh với IMG3").
+    """
+    so: list = []
+    for phan in re.split(r"[,;|&]|\bva\b|\bvà\b|\band\b", image_path or ""):
+        khop = _BI_DANH_RE.search(phan) or _CHI_SO_RE.match(phan)
+        if khop:
+            so.append(int(khop.group(1)))
+    so += [int(k.group(1)) for k in _BI_DANH_RE.finditer(query or "")]
+    return list(dict.fromkeys(so))
+
+
+def so_sanh_nhieu_anh(query: str, ds_so: list, config: Optional[dict]):
+    """Hướng 6: so sánh 2-5 ảnh trong MỘT lượt model (thay vì gọi riêng từng ảnh rồi ghép).
+
+    Câu hỏi đếm ("ảnh nào nhiều chó hơn") thì đếm từng ảnh bằng YOLO trước (miễn phí)
+    rồi đưa số đếm cho model, vì model nhìn ảnh đếm không đáng tin bằng YOLO.
+    Trả (câu trả lời, artifact) như các tool content_and_artifact khác.
+    """
+    from app.agents.vision_agent.labels import loc_theo_lop, lop_tu_cau_hoi
+    from app.agents.vision_agent.tools import (
+        SO_ANH_SO_SANH_TOI_DA,
+        default_detector,
+        parse_yolo_results,
+        tra_loi_nhieu_anh,
+    )
+
+    giai = ((config or {}).get("configurable") or {}).get("image_resolver")
+    if giai is None:
+        return tool_error(
+            "NO_IMAGE_MEMORY",
+            "Comparing images needs the conversation image memory (IMG ids); "
+            "ask the user to send the images in one conversation.",
+        ), {}
+    ds_so = ds_so[:SO_ANH_SO_SANH_TOI_DA]
+    anh = []
+    for so in ds_so:
+        duong_dan = giai(so)
+        if not duong_dan:
+            return tool_error(
+                "IMAGE_NOT_IN_MEMORY",
+                f"IMG{so} is not available any more. Use only ids listed in IMAGE MEMORY.",
+            ), {}
+        anh.append((so, duong_dan))
+
+    so_dem = None
+    loai = lop_tu_cau_hoi(query)
+    # Câu so sánh số lượng ("ảnh nào nhiều chó hơn") không có chữ "bao nhiêu/đếm" nhưng
+    # vẫn là câu đếm.
+    so_luong = bool(loai) and bool(_SO_SANH_SO_LUONG_RE.search(khong_dau(query)))
+    if can_dem_vat_the(query) or so_luong:
+        try:
+            so_dem = {
+                so: loc_theo_lop(parse_yolo_results(default_detector(p)), loai)["counting"]
+                for so, p in anh
+            }
+        except Exception:  # noqa: BLE001 - thiếu YOLO: vẫn so sánh được, chỉ không có số đếm
+            so_dem = None
+
+    # Chủ đề: câu hỏi chỉ thẳng tới chủ đề nào thì dùng; không thì chỉ dùng chủ đề của
+    # ảnh khi MỌI ảnh cùng một chủ đề (ảnh chó so với ảnh món ăn thì để "chung").
+    chu_de = None
+    from app.core import config as app_config
+
+    if app_config.settings.vision_topics:
+        cua_anh = {giai.chu_de(so) if hasattr(giai, "chu_de") else None for so in ds_so}
+        chu_de = chon_chu_de(query, cua_anh.pop() if len(cua_anh) == 1 else None)
+    with dung_chu_de(chu_de):
+        tra_loi = tra_loi_nhieu_anh(anh, query, so_dem=so_dem)
+    if tra_loi.startswith("ERROR:"):
+        return tra_loi, {}
+    return tra_loi, {"compared_images": ds_so, "counts_per_image": so_dem or {}}
 
 
 def chon_chu_de_cho_anh(query: str, so_anh: int | None, config: dict | None) -> str | None:
@@ -304,6 +339,38 @@ def thu_tra_loi_truc_tiep(query: str, image_path: str | None) -> str | None:
     return None if ket_qua.startswith("ERROR:") else ket_qua
 
 
+def thu_dem_bang_gemini(query: str, image_path: Optional[str], config: Optional[dict]) -> Optional[str]:
+    """Hướng 4, đường tắt: câu đếm vật NGOÀI 80 loại COCO ("có mấy quả xoài").
+
+    Gọi thẳng tool đếm (bên trong nó gọi Gemini MỘT lượt) thay vì chạy vision agent
+    ReAct (thêm 2 lượt model chỉ để quyết định gọi tool). Kết quả thô được ghi vào
+    tool_sink như khi agent tự gọi, để web UI vẽ khung. None = không phải loại câu này.
+    """
+    from app.agents.vision_agent.gemini_detect import can_dung_gemini, tra_loi_tu_payload
+    from app.agents.vision_agent.tools import make_detect_and_count_tool
+
+    if not can_dem_vat_the(query) or not can_dung_gemini(query):
+        return None
+    ref = image_path or extract_image_ref(query)
+    if not ref:
+        return None
+    ket = make_detect_and_count_tool().invoke({"text": ref})
+    kho = ((config or {}).get("configurable") or {}).get("tool_sink")
+    if kho is not None:
+        kho["detect_and_count_objects"] = ket
+    if ket.startswith("ERROR:"):
+        return ket
+    import json
+
+    payload = json.loads(ket)
+    if payload.get("source") == "gemini":
+        return tra_loi_tu_payload(payload)
+    # Gemini lỗi, YOLO đếm loại gốc: đưa nguyên số đếm + ghi chú cho supervisor diễn đạt.
+    return json.dumps(
+        {k: payload[k] for k in ("counting", "labels_vi", "note") if k in payload}, ensure_ascii=False
+    )
+
+
 def giai_bi_danh_anh(
     query: str, image_path: str | None, config: dict | None
 ) -> tuple[str | None, str | None]:
@@ -338,19 +405,7 @@ def research_tool(query: str, config: RunnableConfig = None):
     Input should be a clear, self-contained question.
     """
     mode = ((config or {}).get("configurable") or {}).get("research_mode")
-    budget_error = _giu_ngan_sach("research_agent", config)
-    if budget_error:
-        return budget_error, {}
-    try:
-        agent = get_research_agent(mode)
-    except Exception as exc:  # noqa: BLE001 - trả lỗi khởi tạo agent theo contract tool
-        return _loi_agent(
-            "research_agent",
-            "SUB_AGENT_INIT_ERROR",
-            f"Không thể khởi tạo research_agent ({type(exc).__name__}).",
-            type(exc).__name__,
-        )
-    return _chay_agent_con(agent, query, config=config, budget_reserved=True)
+    return _chay_agent_con(get_research_agent(mode), query)
 
 
 @tool("vision_agent_tool", response_format="content_and_artifact")
@@ -360,8 +415,24 @@ def vision_tool(
     """Useful for analyzing images, object detection/counting with YOLO, or visual description.
     Input should be a clear query describing what to analyze or detect.
     `image_path` is the image to look at: an id from IMAGE MEMORY such as "IMG3",
-    or a file path / URL exactly as the user gave it. One image per call.
+    or a file path / URL exactly as the user gave it. One image per call, EXCEPT when
+    the user asks to COMPARE 2-5 remembered images: then pass all their ids in one
+    call, comma-separated, e.g. image_path="IMG1,IMG3".
     """
+    # Nhiều ảnh: CHỈ so sánh khi câu hỏi có ý so sánh; không thì trả lời từng ảnh riêng.
+    ds_so = cac_bi_danh(query, image_path)
+    # Khung hình chính của video (IMG901+): xem cùng lúc như MỘT cảnh theo thời gian.
+    if ds_so and all(so >= SO_KHUNG_VIDEO_DAU for so in ds_so):
+        return xem_khung_video(query, ds_so, config)
+    if len(ds_so) >= 2:
+        # Xét câu hỏi GỐC của người dùng (supervisor có thể tự viết lại thành "so sánh"
+        # dù người dùng không hề hỏi vậy). Không có câu gốc (CLI, test cũ) -> xét query.
+        cau_goc = ((config or {}).get("configurable") or {}).get("user_question") or query
+        if la_cau_so_sanh(cau_goc):
+            return so_sanh_nhieu_anh(query, ds_so, config)
+        # Hỏi từng ảnh bằng chính câu của người dùng (không phải câu supervisor viết lại).
+        return tra_loi_tung_anh(cau_goc, ds_so, config)
+
     so_anh = so_bi_danh(query, image_path)
     image_path, loi = giai_bi_danh_anh(query, image_path, config)
     if loi:
@@ -375,24 +446,11 @@ def vision_tool(
     # Chủ đề ảnh: lời dặn riêng cho lượt nhìn ảnh (xem topics.py). Không có chủ đề
     # trong hồ sơ (khách vãng lai, ảnh cũ) thì chỉ dựa vào câu hỏi, rồi đến "chung".
     with dung_chu_de(chon_chu_de_cho_anh(query, so_anh, config)):
-        agent_name = "vision_agent"
-        budget_error = _giu_ngan_sach(agent_name, config)
-        if budget_error:
-            return budget_error, {}
         # Đường nhanh: một lượt model nhìn ảnh và trả lời luôn (xem VISION_DIRECT).
         nhanh = thu_tra_loi_truc_tiep(query, image_path)
         if nhanh is not None:
             return nhanh, {}
-        try:
-            agent = get_vision_agent()
-        except Exception as exc:  # noqa: BLE001 - trả lỗi khởi tạo agent theo contract tool
-            return _loi_agent(
-                agent_name,
-                "SUB_AGENT_INIT_ERROR",
-                f"Không thể khởi tạo {agent_name} ({type(exc).__name__}).",
-                type(exc).__name__,
-            )
-        return _chay_agent_con(agent, full_query, config, budget_reserved=True)
+        return _chay_agent_con(get_vision_agent(), full_query, config)
 
 
 def make_sub_agent_tool(agent: Any, tool_name: str | None = None) -> BaseTool:
@@ -408,11 +466,15 @@ def make_sub_agent_tool(agent: Any, tool_name: str | None = None) -> BaseTool:
         f"{agent_name}_tool" if not agent_name.endswith("_tool") else agent_name
     )
 
-    @tool(registered_tool_name)
-    def dynamic_sub_agent_tool(query: str, config: RunnableConfig = None) -> str:
+    @tool(tool_name)
+    def dynamic_sub_agent_tool(query: str) -> str:
         """Forward query to the sub-agent and return the final response text."""
-        answer, _ = _chay_agent_con(agent, query, config=config)
-        return answer
+        if hasattr(agent, "invoke"):
+            res = agent.invoke({"messages": [("user", query)]})
+            if isinstance(res, dict) and "messages" in res:
+                return res["messages"][-1].content
+            return str(res)
+        return f"Agent {agent_name} executed."
 
     return dynamic_sub_agent_tool
 

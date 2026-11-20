@@ -302,3 +302,42 @@ def test_nguoi_dang_nhap_agent_loi_khong_de_lai_hoi_thoai_rong(monkeypatch, tmp_
             select(func.count()).select_from(store_mod.conversations)
         ).scalar()
     assert so_hoi_thoai == 0, "Agent loi khong duoc de lai hoi thoai rong trong database"
+
+
+def _bao_cao_gia(monkeypatch):
+    from app.agents.research_agent import deep_research as dr
+
+    monkeypatch.setattr(dr, "run_deep_research", lambda q, mode: {
+        "report": "Bao cao [1]\nNGUỒN\n[1] news: gn-11111111", "markdown": "# MD", "filename": "r.md",
+        "sub_questions": ["a"], "mode": "standard", "grounding": {}, "path": "x", "trace": [], "evidence": ""})
+
+
+def test_chuyen_sau_dang_nhap_thi_luu_va_noi_tiep_hoi_thoai(monkeypatch, tmp_path):
+    api_mod, auth_mod, store_mod = _nap(monkeypatch, tmp_path)
+    _bao_cao_gia(monkeypatch)
+    client = TestClient(api_mod.app)
+
+    r = client.post("/api/deep_research", data={"question": "Hoi sau"}, headers=_bearer(auth_mod, A))
+    assert r.status_code == 200
+    cid = r.json()["conversation_id"]
+    r2 = client.post("/api/deep_research", data={"question": "Hoi sau tiep", "conversation_id": cid},
+                     headers=_bearer(auth_mod, A))
+    assert r2.json()["conversation_id"] == cid
+
+    tin = client.get(f"/api/conversations/{cid}", headers=_bearer(auth_mod, A)).json()["messages"]
+    assert [m["role"] for m in tin] == ["user", "assistant", "user", "assistant"]
+    assert tin[1]["extras"]["markdown"] == "# MD"  # mở lại vẫn tải được báo cáo .md
+
+
+def test_chuyen_sau_khach_khong_luu_va_khong_mo_hoi_thoai_nguoi_khac(monkeypatch, tmp_path):
+    api_mod, auth_mod, store_mod = _nap(monkeypatch, tmp_path)
+    _bao_cao_gia(monkeypatch)
+    client = TestClient(api_mod.app)
+
+    r = client.post("/api/deep_research", data={"question": "Khach hoi"})
+    assert r.status_code == 200 and "conversation_id" not in r.json()
+    cid = client.post("/api/deep_research", data={"question": "Cua A"},
+                      headers=_bearer(auth_mod, A)).json()["conversation_id"]
+    r = client.post("/api/deep_research", data={"question": "B chen vao", "conversation_id": cid},
+                    headers=_bearer(auth_mod, B))
+    assert r.status_code == 404

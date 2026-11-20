@@ -1,0 +1,302 @@
+{
+ "mo_ta": "Bộ đánh giá Vision: ảnh công khai trong repo mẫu của các dự án phát hiện vật thể, đáp án đếm do người gắn nhãn bằng mắt.",
+ "quy_uoc": [
+  "dem chỉ ghi những loại COCO mà người gắn nhãn thấy RÕ và đếm được chắc chắn. Loại không ghi = không chấm (ví dụ đám đông, vật bị che nhiều, vật quá nhỏ).",
+  "dem rỗng {} = ảnh không có vật thể nào trong 80 lớp COCO (tranh, khỉ đột, bướm): dùng để đo model có 'bịa' vật thể không.",
+  "Mỗi ảnh được kiểm sha256 sau khi tải: đổi nội dung là báo lỗi, đáp án không bao giờ lệch ảnh.",
+  "dem_ngoai: vật NGOÀI 80 lớp COCO hoặc có thuộc tính (\"người hói đầu\"), dùng cho phần 5 (Gemini, chỉ chạy khi có --gemini vì tốn lượt). Khoá là cụm tiếng Việt đúng như câu hỏi \"Có mấy <cụm>?\"."
+ ],
+ "nguoi_gan_nhan": "Claude (xem ảnh bằng mắt). CẦN thành viên nhóm xem lại trước khi đưa số liệu ra bảo vệ.",
+ "anh": [
+  {
+   "file": "adarknet_dog.jpg",
+   "url": "https://raw.githubusercontent.com/AlexeyAB/darknet/master/data/dog.jpg",
+   "sha256": "5a9522051c3cec2bbd2f6323fccba32e8fbf3ddcc2b3e2fd46b04c720bc6f866",
+   "dem": {
+    "dog": 1,
+    "bicycle": 1,
+    "truck": 1
+   }
+  },
+  {
+   "file": "adarknet_person.jpg",
+   "url": "https://raw.githubusercontent.com/AlexeyAB/darknet/master/data/person.jpg",
+   "sha256": "cdcbab947e46110fc2b77784ac54ddbbab2640f1e44cb5e91fc8984a9793a7d1",
+   "dem": {
+    "person": 1,
+    "dog": 1,
+    "horse": 1
+   },
+   "dem_ngoai": {
+    "người mặc áo khoác xanh": 1
+   }
+  },
+  {
+   "file": "cv_apple.jpg",
+   "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/apple.jpg",
+   "sha256": "e86879de3d9a807dedc742a8f464f39e6b74bbb531a1fba3583155d94997d1cd",
+   "dem": {
+    "apple": 1
+   }
+  },
+  {
+   "file": "cv_baboon.jpg",
+   "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/baboon.jpg",
+   "sha256": "1a1dd18d78eec44420af3b0b7f08ee3d41c982916cae3ce203d7ff35d754cc0f",
+   "dem": {},
+   "dem_ngoai": {
+    "con khỉ": 1
+   }
+  },
+  {
+   "file": "cv_butterfly.jpg",
+   "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/butterfly.jpg",
+   "sha256": "34a99716b78ded10eae87b4880de739d3e68cc7dd1a96812bb28f469d5eeaea8",
+   "dem": {},
+   "dem_ngoai": {
+    "con bướm": 1
+   }
+  },
+  {
+   "file": "cv_starry_night.jpg",
+   "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/starry_night.jpg",
+   "sha256": "accda7a19a90f22a4a922fdc8c230167d7abf5f80882171e2cee125c5f12481d",
+   "dem": {}
+  },
+  {
+   "file": "cv_lena.jpg",
+   "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/lena.jpg",
+   "sha256": "7de7ed51a1594fff247f4cae2301eceacf5313d6011e37b4a4c8733f7bb72c07",
+   "dem": {
+    "person": 1
+   }
+  },
+  {
+   "file": "cv_messi5.jpg",
+   "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/messi5.jpg",
+   "sha256": "1d570e49654e84c7a943918537bd9e5e1ef82920152e147c834006e235be97c9",
+   "dem": {
+    "sports ball": 1
+   }
+  },
+  {
+   "file": "cv_orange.jpg",
+   "url": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/orange.jpg",
+   "sha256": "152c20d2f380ac985de25e474e1a5f06ed34b932191342099b8272a63a15a079",
+   "dem": {
+    "orange": 1
+   }
+  },
+  {
+   "file": "darknet_eagle.jpg",
+   "url": "https://raw.githubusercontent.com/pjreddie/darknet/master/data/eagle.jpg",
+   "sha256": "f95f57297fd51a6c5ddceb5ed6916fa759d1d65f402fee34c05b31a9608755c0",
+   "dem": {
+    "bird": 1
+   },
+   "dem_ngoai": {
+    "con đại bàng": 1
+   }
+  },
+  {
+   "file": "darknet_giraffe.jpg",
+   "url": "https://raw.githubusercontent.com/pjreddie/darknet/master/data/giraffe.jpg",
+   "sha256": "00dc48a9b2af8a1fe4c4b79319726591f1033c7e1150f21e7577a79f3b6659f1",
+   "dem": {
+    "giraffe": 1,
+    "zebra": 1
+   }
+  },
+  {
+   "file": "v5_bus.jpg",
+   "url": "https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/bus.jpg",
+   "sha256": "33b198a1d2839bb9ac4c65d61f9e852196793cae9a0781360859425f6022b69c",
+   "dem": {
+    "bus": 1
+   }
+  },
+  {
+   "file": "mmdet_demo.jpg",
+   "url": "https://raw.githubusercontent.com/open-mmlab/mmdetection/main/demo/demo.jpg",
+   "sha256": "8e9ab135da7eacabdeeeee11ba4b7bcdd1bfac128cf92a9de9c79f984060ae1e",
+   "dem": {
+    "bench": 2
+   }
+  },
+  {
+   "file": "mrcnn_2383514521_1fc8d7b0de_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/2383514521_1fc8d7b0de_z.jpg",
+   "sha256": "38eb4754832a77b5d867a9d578a3be11fc2b86d68445c1e3d5b65aa1575013c6",
+   "dem": {
+    "zebra": 1
+   }
+  },
+  {
+   "file": "mrcnn_3627527276_6fe8cd9bfe_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/3627527276_6fe8cd9bfe_z.jpg",
+   "sha256": "4b0fbe9ad02b27275871de56e4cc2a43ca42d81cd317d0e8c8cdb469cc8895fa",
+   "dem": {
+    "zebra": 3,
+    "giraffe": 1
+   }
+  },
+  {
+   "file": "mrcnn_3878153025_8fde829928_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/3878153025_8fde829928_z.jpg",
+   "sha256": "d7dae198feaf410f111962c664f08d945fea9f8c32b4fa3dda9754bdc26ec5f3",
+   "dem": {
+    "bed": 1,
+    "couch": 1
+   }
+  },
+  {
+   "file": "mrcnn_3862500489_6fd195d183_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/3862500489_6fd195d183_z.jpg",
+   "sha256": "1c911efcfaca6b975a0b3ec772005863140c70df33ad16a13043db905dab3b40",
+   "dem": {
+    "tennis racket": 1
+   }
+  },
+  {
+   "file": "mrcnn_4410436637_7b0ca36ee7_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/4410436637_7b0ca36ee7_z.jpg",
+   "sha256": "af5387f873416ab361b9ea8f50182844b36accbd2b9616cd64e6cfd0b84d016d",
+   "dem": {
+    "snowboard": 1
+   }
+  },
+  {
+   "file": "mrcnn_5951960966_d4e1cda5d0_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/5951960966_d4e1cda5d0_z.jpg",
+   "sha256": "cfdf05b111a248a68a8a29b7791cbc740f63d3af09aaa40aeac3a7019f4e5bc4",
+   "dem": {
+    "person": 3,
+    "umbrella": 1
+   }
+  },
+  {
+   "file": "mrcnn_6584515005_fce9cec486_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/6584515005_fce9cec486_z.jpg",
+   "sha256": "638828243aa625bfdd20c5d72f4ef98b6cb98f1ba75dbfb735361a7fb862590d",
+   "dem": {
+    "giraffe": 1
+   }
+  },
+  {
+   "file": "mrcnn_6821351586_59aa0dc110_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/6821351586_59aa0dc110_z.jpg",
+   "sha256": "127174410c78bf6f59b3fb1f325f01cd12259bc4931bb0ab26caef8e8e3b8b68",
+   "dem": {
+    "dog": 1,
+    "motorcycle": 1,
+    "car": 1
+   }
+  },
+  {
+   "file": "mrcnn_7933423348_c30bd9bd4e_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/7933423348_c30bd9bd4e_z.jpg",
+   "sha256": "1b05f4958120b8ab11c5a3b00449320455e16c1a9795871e8e42913c1a04be69",
+   "dem": {
+    "motorcycle": 1
+   }
+  },
+  {
+   "file": "mrcnn_8433365521_9252889f9a_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/8433365521_9252889f9a_z.jpg",
+   "sha256": "de1a438f6406e1e9d928f1b35faacaba84d56894366eb1aafa397205f8b8fc7a",
+   "dem": {
+    "horse": 1,
+    "person": 1
+   }
+  },
+  {
+   "file": "mrcnn_8699757338_c3941051b6_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/8699757338_c3941051b6_z.jpg",
+   "sha256": "5d288e0c0294bfe693d627355db7861ae3a963a5e0eff4fa23168d68401fe6b8",
+   "dem": {
+    "bus": 1
+   }
+  },
+  {
+   "file": "mrcnn_8734543718_37f6b8bd45_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/8734543718_37f6b8bd45_z.jpg",
+   "sha256": "e9f29f7db9fd2dddac47762b4bbdaeb6dbdfbc194735b27abaaa281d7de076fe",
+   "dem": {
+    "donut": 9,
+    "knife": 1
+   }
+  },
+  {
+   "file": "mrcnn_8829708882_48f263491e_z.jpg",
+   "url": "https://raw.githubusercontent.com/matterport/Mask_RCNN/master/images/8829708882_48f263491e_z.jpg",
+   "sha256": "5db92d3ade8c4721645987dac30244b392c24d0a813e0f6e4f1a000478c07216",
+   "dem": {
+    "bus": 1
+   }
+  },
+  {
+   "file": "tf_image1.jpg",
+   "url": "https://raw.githubusercontent.com/tensorflow/models/master/research/object_detection/test_images/image1.jpg",
+   "sha256": "78094cc48fbcfd9b6d321fe13619ecc72b65e006fc1b4c4458409ade9979486d",
+   "dem": {
+    "dog": 2
+   }
+  },
+  {
+   "file": "tv_dog1.jpg",
+   "url": "https://raw.githubusercontent.com/pytorch/vision/main/gallery/assets/dog1.jpg",
+   "sha256": "828986ba0cdd909e3f6029d357938efba67d236350f724224b2e45cf0af0841f",
+   "dem": {
+    "dog": 1
+   }
+  },
+  {
+   "file": "tv_dog2.jpg",
+   "url": "https://raw.githubusercontent.com/pytorch/vision/main/gallery/assets/dog2.jpg",
+   "sha256": "91c383f13fe7baf1c5306def5f50cc5bb0241e64065c081ad57671d33c503891",
+   "dem": {
+    "dog": 1
+   }
+  },
+  {
+   "file": "v5_zidane.jpg",
+   "url": "https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/zidane.jpg",
+   "sha256": "356dad2107bb0254e4e4a81bc1d9c7140043e88569d546e5b404b19bffa77d0a",
+   "dem": {
+    "person": 2
+   },
+   "dem_ngoai": {
+    "người hói đầu": 1
+   }
+  },
+  {
+   "file": "yolov7_image1.jpg",
+   "url": "https://raw.githubusercontent.com/WongKinYiu/yolov7/main/inference/images/image1.jpg",
+   "sha256": "fb0f943cc1b027c64e5dbbc486b1d62d431244565e68b730e2ff8264d51116db",
+   "dem": {
+    "person": 2
+   }
+  },
+  {
+   "file": "yolov7_image2.jpg",
+   "url": "https://raw.githubusercontent.com/WongKinYiu/yolov7/main/inference/images/image2.jpg",
+   "sha256": "90fad7bfc9fab88492d9722ea1aa14ee77514d8c10dbda86086bd37d8a05acf0",
+   "dem": {
+    "person": 2,
+    "sports ball": 1
+   },
+   "dem_ngoai": {
+    "người mặc áo vàng": 1
+   }
+  },
+  {
+   "file": "yolov7_image3.jpg",
+   "url": "https://raw.githubusercontent.com/WongKinYiu/yolov7/main/inference/images/image3.jpg",
+   "sha256": "2fb0ce55959869151baba2d1197fb786615539d9184ea880983f7f6c4908e822",
+   "dem": {
+    "horse": 1,
+    "dog": 1
+   }
+  }
+ ]
+}

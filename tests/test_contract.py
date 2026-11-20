@@ -104,7 +104,9 @@ def test_khong_hardcode_api_key_trong_source():
     pattern = re.compile(r"sk-[A-Za-z0-9_\-]{20,}|AIza[A-Za-z0-9_\-]{30,}|AQ\.[A-Za-z0-9_\-]{20,}")
     offenders = []
     for path in Path(ROOT_DIR).rglob("*.py"):
-        if ".venv" in path.parts:
+        # Bỏ mọi môi trường ảo (.venv, .venv-1, .venv-2, venv...): mã thư viện bên thứ ba
+        # có chuỗi giống khoá mẫu, không phải khoá của dự án.
+        if any(part.startswith((".venv", "venv")) for part in path.parts):
             continue
         if pattern.search(path.read_text(encoding="utf-8")):
             offenders.append(str(path))

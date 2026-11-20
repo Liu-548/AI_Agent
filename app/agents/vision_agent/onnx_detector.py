@@ -84,13 +84,15 @@ def _nap_phien(weights: str):
 # Tiền xử lý / hậu xử lý
 # --------------------------------------------------------------------------- #
 def _doc_anh(image_ref: str):
-    from PIL import Image
+    """Đọc ảnh RGB ĐÃ XOAY theo cờ EXIF (ảnh dọc chụp từ điện thoại), để khung phát
+    hiện khớp với ảnh người dùng nhìn thấy."""
+    from app.agents.vision_agent.image_utils import mo_anh_dung_huong
 
     if image_ref.lower().startswith("http"):
         resp = requests.get(image_ref, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-        return Image.open(io.BytesIO(resp.content)).convert("RGB")
-    return Image.open(image_ref).convert("RGB")
+        return mo_anh_dung_huong(io.BytesIO(resp.content))
+    return mo_anh_dung_huong(image_ref)
 
 
 def _letterbox(im, canh: int) -> Tuple[np.ndarray, float, int, int]:

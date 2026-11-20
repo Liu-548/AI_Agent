@@ -914,6 +914,13 @@ Làm sau khi Phase 1 ổn định và đã qua nghiệm thu thủ công.
 - Gộp văn chương và âm nhạc. Nguồn dự kiến: Open Library, Gutendex (Project Gutenberg), MusicBrainz (khoảng 1 request/giây, bắt buộc có User-Agent), Wikipedia.
 - **Quy tắc cứng:** không chép lời bài hát hay đoạn văn có bản quyền — chỉ tóm tắt và phân tích. Tác phẩm thuộc phạm vi công cộng được trích ngắn. Nên có thêm một kiểm tra trong code giới hạn độ dài trích dẫn nguyên văn.
 
+**Phase 6 — Bốn chủ đề dữ liệu có cấu trúc (11/2026, nâng tổng lên 10 agent chủ đề)**
+- **`weather_agent`:** tool `weather_forecast` (Open-Meteo geocoding + forecast, không key). Nhãn `[open-meteo: <Tên>, <Quốc gia>]`.
+- **`economy_agent`:** tool `worldbank_indicator` (World Bank API v2, đầu vào `"<ISO3> <chỉ số>"`) + `exchange_rate` (open.er-api.com, có VND, cập nhật hằng ngày). Nhãn `[worldbank: <ISO3>/<mã chỉ số>]`, `[exchangerate: <FROM>-<TO>]`. Quy tắc riêng: không dự đoán, không tư vấn đầu tư.
+- **`geo_agent`:** tool `country_lookup` (World Bank Country API: thủ đô, khu vực, mức thu nhập + dân số, diện tích) + `wikipedia_search` cho ngôn ngữ/tiền tệ. Nhãn `[worldbank-country: <ISO3>]`. Không dùng REST Countries vì v1–v4 đã khai tử, v5 bắt buộc API key.
+- **`dictionary_agent`:** tool `dictionary_lookup` (Free Dictionary API, dữ liệu Wiktionary CC BY-SA, chỉ tiếng Anh) + `wikipedia_search`. Nhãn `[dictionary: <từ>]`.
+- HTTP 404 của Free Dictionary = "không có kết quả", không phải lỗi dịch vụ.
+
 **Phase song song — UI và trực quan hoá:** đọc `ToolMessage.artifact["trace"]` để vẽ cây nhiệm vụ lead → chủ đề → tool.
 
 ## 14. Rủi ro và cách giảm

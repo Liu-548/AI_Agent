@@ -1,0 +1,4 @@
+{
+  "_huong_dan": "Bỏ ảnh của bạn vào thư mục này rồi ghi đáp án đếm ở dưới, dạng \"ten_file.jpg\": {\"loại COCO tiếng Anh\": số lượng}. Chỉ ghi loại bạn thấy rõ và đếm chắc chắn. Xóa dòng ví dụ bên dưới. Nên có vài ảnh DỌC chụp thẳng từ điện thoại (đừng gửi qua Zalo/Messenger: các app đó thường xóa cờ EXIF).",
+  "_vi_du.jpg": {"dog": 2, "person": 1}
+}

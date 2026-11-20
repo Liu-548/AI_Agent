@@ -1,0 +1,438 @@
+{
+ "mo_ta": "Câu hỏi tiếng Việt do người viết tay + đáp án mong đợi (viết trước khi chạy code). chu_de: id chủ đề mà câu hỏi nên dẫn tới; 'general' = câu hỏi không chỉ thẳng chủ đề nào.",
+ "chu_de": [
+  {
+   "q": "Đây là loài chim gì?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Con gì đây?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Giống chó này là gì?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Đây là giống mèo nào?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Con vật này tên gì?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Động vật trong ảnh là gì?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "day la con gi",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "giong cho gi day",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Con vật trong ảnh đang làm gì?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "loài chim này sống ở đâu",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Con mèo này bao nhiêu tuổi?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Đây là loại gì vậy?",
+   "mong_doi": "animal"
+  },
+  {
+   "q": "Đây là địa điểm nào?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Danh lam thắng cảnh này ở đâu?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Nơi này là nơi nào?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "di tich nay la gi",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Đi du lịch ở đây có gì hay?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Thắng cảnh này tên là gì?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "đây là ở đâu",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Bức ảnh này chụp ở đâu?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Đây là món gì?",
+   "mong_doi": "food"
+  },
+  {
+   "q": "Món ăn này nguyên liệu gồm những gì?",
+   "mong_doi": "food"
+  },
+  {
+   "q": "Cách nấu món này như thế nào?",
+   "mong_doi": "food"
+  },
+  {
+   "q": "mon gi day",
+   "mong_doi": "food"
+  },
+  {
+   "q": "Đồ ăn này có gì?",
+   "mong_doi": "food"
+  },
+  {
+   "q": "nau an the nao",
+   "mong_doi": "food"
+  },
+  {
+   "q": "Đĩa này là món Việt hay món Hàn?",
+   "mong_doi": "food"
+  },
+  {
+   "q": "Đọc chữ trên ảnh",
+   "mong_doi": "document"
+  },
+  {
+   "q": "Chép lại nội dung chữ giúp tôi",
+   "mong_doi": "document"
+  },
+  {
+   "q": "Hóa đơn này tổng bao nhiêu?",
+   "mong_doi": "document"
+  },
+  {
+   "q": "Biên lai này ghi gì?",
+   "mong_doi": "document"
+  },
+  {
+   "q": "OCR ảnh này",
+   "mong_doi": "document"
+  },
+  {
+   "q": "Văn bản này viết gì?",
+   "mong_doi": "document"
+  },
+  {
+   "q": "Chữ viết trong ảnh là gì?",
+   "mong_doi": "document"
+  },
+  {
+   "q": "Dịch chữ trên biển báo",
+   "mong_doi": "document"
+  },
+  {
+   "q": "Mô tả bức ảnh",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Trong ảnh có gì?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Có mấy người?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Ai đang đứng ở đó?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Tóm tắt ảnh này",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Màu chủ đạo của ảnh là gì?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Ảnh này có đẹp không?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Có bao nhiêu con chó?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Đây là gì?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Ảnh này có chữ ký của ai?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Có món quà nào trong ảnh không?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Người này đang cầm gì?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Chiếc xe màu gì?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Thời tiết trong ảnh thế nào?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Tôi nên chụp lại ảnh này thế nào cho đẹp?",
+   "mong_doi": "general"
+  },
+  {
+   "q": "Đọc số liệu trong biểu đồ này",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Biểu đồ này nói lên điều gì?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Trục tung của biểu đồ là gì?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Chuyển bảng số liệu trong ảnh thành bảng",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Sơ đồ khối này hoạt động thế nào?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Giải thích sơ đồ khoa học này",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Đường nào tăng nhanh nhất trên đồ thị?",
+   "mong_doi": "chart"
+  },
+  {
+   "q": "Đây là khu đô thị nào?",
+   "mong_doi": "travel"
+  },
+  {
+   "q": "Số đo các cạnh trong ảnh là bao nhiêu?",
+   "mong_doi": "general"
+  }
+ ],
+ "loai_vat": [
+  {
+   "q": "Có mấy con mèo?",
+   "mong_doi": [
+    "cat"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu con chó?",
+   "mong_doi": [
+    "dog"
+   ]
+  },
+  {
+   "q": "Đếm số người",
+   "mong_doi": [
+    "person"
+   ]
+  },
+  {
+   "q": "How many people are there?",
+   "mong_doi": [
+    "person"
+   ]
+  },
+  {
+   "q": "Có mấy chiếc ô tô?",
+   "mong_doi": [
+    "car"
+   ]
+  },
+  {
+   "q": "Bao nhiêu chiếc xe máy?",
+   "mong_doi": [
+    "motorcycle"
+   ]
+  },
+  {
+   "q": "Bao nhiêu xe?",
+   "mong_doi": [
+    "bicycle",
+    "bus",
+    "car",
+    "motorcycle",
+    "truck"
+   ]
+  },
+  {
+   "q": "Có mấy con ngựa vằn?",
+   "mong_doi": [
+    "zebra"
+   ]
+  },
+  {
+   "q": "Có mấy con ngựa?",
+   "mong_doi": [
+    "horse"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu quả cam?",
+   "mong_doi": [
+    "orange"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu chiếc bánh donut?",
+   "mong_doi": [
+    "donut"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu ghế sofa?",
+   "mong_doi": [
+    "couch"
+   ]
+  },
+  {
+   "q": "Có mấy cái ghế?",
+   "mong_doi": [
+    "chair"
+   ]
+  },
+  {
+   "q": "Có mấy con chim?",
+   "mong_doi": [
+    "bird"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu chiếc xe buýt?",
+   "mong_doi": [
+    "bus"
+   ]
+  },
+  {
+   "q": "Có mấy con hươu cao cổ?",
+   "mong_doi": [
+    "giraffe"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu chiếc ô?",
+   "mong_doi": [
+    "umbrella"
+   ]
+  },
+  {
+   "q": "Đếm số quả bóng",
+   "mong_doi": [
+    "sports ball"
+   ]
+  },
+  {
+   "q": "Có mấy cái ghế dài?",
+   "mong_doi": [
+    "bench"
+   ]
+  },
+  {
+   "q": "Có mấy cái giường?",
+   "mong_doi": [
+    "bed"
+   ]
+  },
+  {
+   "q": "Có mấy chiếc xe đạp?",
+   "mong_doi": [
+    "bicycle"
+   ]
+  },
+  {
+   "q": "Đếm số chó và mèo",
+   "mong_doi": [
+    "cat",
+    "dog"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu vợt tennis?",
+   "mong_doi": [
+    "tennis racket"
+   ]
+  },
+  {
+   "q": "Có mấy con voi?",
+   "mong_doi": [
+    "elephant"
+   ]
+  },
+  {
+   "q": "Có mấy cái bàn?",
+   "mong_doi": [
+    "dining table"
+   ]
+  },
+  {
+   "q": "Có bao nhiêu chiếc điện thoại?",
+   "mong_doi": [
+    "cell phone"
+   ]
+  },
+  {
+   "q": "Có mấy cái laptop?",
+   "mong_doi": [
+    "laptop"
+   ]
+  },
+  {
+   "q": "Đếm các vật thể",
+   "mong_doi": []
+  },
+  {
+   "q": "Trong ảnh có gì?",
+   "mong_doi": []
+  },
+  {
+   "q": "Mô tả ảnh",
+   "mong_doi": []
+  },
+  {
+   "q": "Cho tôi biết có bao nhiêu vật",
+   "mong_doi": []
+  },
+  {
+   "q": "Với bức ảnh này, hãy đếm giúp tôi",
+   "mong_doi": []
+  },
+  {
+   "q": "Chỗ này là chỗ nào, bạn cho biết giúp",
+   "mong_doi": []
+  },
+  {
+   "q": "Có điều gì đặc biệt trong ảnh?",
+   "mong_doi": []
+  }
+ ]
+}

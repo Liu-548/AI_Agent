@@ -24,6 +24,8 @@ class SearchProfile:
     max_lookups_per_topic: int       # trần doi_lookup cho MỘT lần gọi agent chủ đề
     max_topic_calls: int             # trần số lần lead gọi agent chủ đề cho MỘT câu hỏi
     inner_recursion_limit: int       # recursion_limit khi invoke agent chủ đề
+    deep_sub_questions: int          # tìm kiếm chuyên sâu: số câu hỏi con tối đa
+    deep_refine_rounds: int          # tìm kiếm chuyên sâu: số vòng tìm bù khi thiếu dữ liệu
 
 
 PROFILES: Dict[str, SearchProfile] = {
@@ -37,6 +39,8 @@ PROFILES: Dict[str, SearchProfile] = {
         max_lookups_per_topic=1,
         max_topic_calls=1,
         inner_recursion_limit=12,
+        deep_sub_questions=3,
+        deep_refine_rounds=0,
     ),
     "standard": SearchProfile(
         name="standard",
@@ -48,6 +52,8 @@ PROFILES: Dict[str, SearchProfile] = {
         max_lookups_per_topic=3,
         max_topic_calls=2,
         inner_recursion_limit=20,
+        deep_sub_questions=4,
+        deep_refine_rounds=1,
     ),
     "full": SearchProfile(
         name="full",
@@ -59,6 +65,8 @@ PROFILES: Dict[str, SearchProfile] = {
         max_lookups_per_topic=5,
         max_topic_calls=3,
         inner_recursion_limit=30,
+        deep_sub_questions=5,
+        deep_refine_rounds=1,
     ),
 }
 

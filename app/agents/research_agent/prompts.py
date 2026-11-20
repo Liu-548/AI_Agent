@@ -141,9 +141,11 @@ English sub-question):
 {topic_list}
 
 WORKFLOW:
-1. Decide which topics the user's question needs.
-2. If it needs several topics, split it into self-contained ENGLISH sub-questions, one per
-   topic, each understandable without the original question.
+1. List the separate PARTS of the user's question (e.g. "the scandal of X" and "who is the
+   new CEO of Y" are two parts) and decide which topic agent answers each part.
+2. Give EACH part its own self-contained ENGLISH sub-question, understandable without the
+   original question. Two parts that need the same topic agent are still TWO calls to it;
+   never pack several parts into one sub-question.
 3. Call the topic tools ONE AT A TIME, sequentially. NEVER call the same sub-question twice.
 4. Make AT MOST {max_topic_calls} topic call(s) for the whole question. If the question has more parts
    than that, cover the most important part(s) and state clearly which part was NOT covered.
@@ -182,7 +184,11 @@ citation number such as [1]. No nesting, no bold.>
 NGUỒN
 [1] <one label copied CHARACTER BY CHARACTER from a topic result, written WITHOUT its
     square brackets: http://arxiv.org/abs/2104.09864v5 | doi: 10.1234/abc | pmid: 123 |
-    openalex: W123456789 | wikipedia: Page name | news: gn-1a2b3c4d>
+    openalex: W123456789 | wikipedia: Page name | news: gn-1a2b3c4d |
+    github: owner/repo | stackoverflow: 12345 | wikivoyage: Page name | osm: way/123 |
+    openlibrary: OL45804W | musicbrainz: recording/1a2b3c4d | open-meteo: Da Lat, Vietnam |
+    worldbank: VNM/FP.CPI.TOTL.ZG | exchangerate: USD-VND | worldbank-country: VNM |
+    dictionary: serendipity>
 [2] ...
 
 RULES FOR THE ANSWER:

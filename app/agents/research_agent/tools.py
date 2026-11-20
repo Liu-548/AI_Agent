@@ -474,6 +474,14 @@ def tim_openalex(query: str, top_k: int, mailto: str, timeout: float = 10.0) -> 
 
     }
 
+    # Tu 02/2026 OpenAlex bat buoc API key (mien phi): khong gui key thi bi 429 rat nhanh.
+
+    from app.core.config import settings
+
+    if settings.openalex_api_key:
+
+        params["api_key"] = settings.openalex_api_key
+
     resp = requests.get("https://api.openalex.org/works", params=params, timeout=timeout)
 
     resp.raise_for_status()

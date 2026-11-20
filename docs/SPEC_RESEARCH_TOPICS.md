@@ -892,7 +892,7 @@ Làm sau khi Phase 1 ổn định và đã qua nghiệm thu thủ công.
 - Cache kết quả tìm kiếm ra JSON theo khoá (nguồn + truy vấn chuẩn hoá) có TTL — cũng là phao cho ngày demo.
 - Cân nhắc xếp hạng bằng embedding local (`all-MiniLM-L6-v2`). Phải hỏi nhóm trước vì cần thêm thư viện.
 
-**Checklist thêm một chủ đề mới** (dùng cho Phase 3–5):
+**Checklist thêm một chủ đề mới** (dùng cho Phase 3–5; tool gọi API web dùng khung chung `topics/web_tool.py`):
 1. Tạo `topics/<ten>_agent/` gồm `__init__.py` (chỉ re-export), `agent.py`, `tools.py`, `prompts.py`.
 2. Thêm **một dòng** `TopicSpec` vào `TOPIC_SPECS`.
 3. Khai báo định dạng nhãn nguồn của chủ đề. Nhãn mới thì thêm một mục vào bảng loại nhãn trong `grounding.py` (vùng chung → báo nhóm).
@@ -901,18 +901,28 @@ Làm sau khi Phase 1 ổn định và đã qua nghiệm thu thủ công.
 6. Kiểm lại hạn mức và điều khoản sử dụng của API trước khi viết code (MT-09).
 
 **Phase 3 — Kỹ thuật & Code (`code_agent`)**
+- **Đã làm (10/2026):** tool `stackoverflow_search` + `github_search`, không cần key.
 - Nguồn dự kiến: GitHub REST API (search repo/code), Stack Exchange API, tài liệu chính thức của thư viện.
 - Nhãn dự kiến: `[github: owner/repo]`, `[stackoverflow: <id>]`.
 - Lưu ý: GitHub search không cần xác thực có hạn mức rất thấp.
 
 **Phase 4 — Du lịch & Địa điểm (`travel_agent`)**
+- **Đã làm (10/2026):** tool `wikivoyage_search` + `place_lookup` (Nominatim) + `wikipedia_search`.
 - Nguồn dự kiến: Wikivoyage (MediaWiki API), OpenStreetMap Nominatim (giới hạn khoảng 1 request/giây, bắt buộc có User-Agent).
 - Nhãn dự kiến: `[wikivoyage: <Page>]`, `[osm: <type>/<id>]`.
 - Quy tắc riêng: thông tin như giá hay giờ mở cửa **không phải thời gian thực**, agent phải nói rõ điều đó.
 
 **Phase 5 — Văn hoá & Nghệ thuật (`culture_agent`)**
+- **Đã làm (10/2026):** tool `book_search` (Open Library) + `music_search` (MusicBrainz, nhãn mã 8 ký tự) + `wikipedia_search`; `TopicSpec.postprocess` = `gioi_han_trich_dan()` cắt trích dẫn trong ngoặc kép > 12 từ. Chưa làm Gutendex.
 - Gộp văn chương và âm nhạc. Nguồn dự kiến: Open Library, Gutendex (Project Gutenberg), MusicBrainz (khoảng 1 request/giây, bắt buộc có User-Agent), Wikipedia.
 - **Quy tắc cứng:** không chép lời bài hát hay đoạn văn có bản quyền — chỉ tóm tắt và phân tích. Tác phẩm thuộc phạm vi công cộng được trích ngắn. Nên có thêm một kiểm tra trong code giới hạn độ dài trích dẫn nguyên văn.
+
+**Phase 6 — Bốn chủ đề dữ liệu có cấu trúc (11/2026, nâng tổng lên 10 agent chủ đề)**
+- **`weather_agent`:** tool `weather_forecast` (Open-Meteo geocoding + forecast, không key). Nhãn `[open-meteo: <Tên>, <Quốc gia>]`.
+- **`economy_agent`:** tool `worldbank_indicator` (World Bank API v2, đầu vào `"<ISO3> <chỉ số>"`) + `exchange_rate` (open.er-api.com, có VND, cập nhật hằng ngày). Nhãn `[worldbank: <ISO3>/<mã chỉ số>]`, `[exchangerate: <FROM>-<TO>]`. Quy tắc riêng: không dự đoán, không tư vấn đầu tư.
+- **`geo_agent`:** tool `country_lookup` (World Bank Country API: thủ đô, khu vực, mức thu nhập + dân số, diện tích) + `wikipedia_search` cho ngôn ngữ/tiền tệ. Nhãn `[worldbank-country: <ISO3>]`. Không dùng REST Countries vì v1–v4 đã khai tử, v5 bắt buộc API key.
+- **`dictionary_agent`:** tool `dictionary_lookup` (Free Dictionary API, dữ liệu Wiktionary CC BY-SA, chỉ tiếng Anh) + `wikipedia_search`. Nhãn `[dictionary: <từ>]`.
+- HTTP 404 của Free Dictionary = "không có kết quả", không phải lỗi dịch vụ.
 
 **Phase song song — UI và trực quan hoá:** đọc `ToolMessage.artifact["trace"]` để vẽ cây nhiệm vụ lead → chủ đề → tool.
 

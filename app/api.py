@@ -92,7 +92,16 @@ THUMBNAIL_MAX_PX = 360
 _vision_graph = None
 _research_graph = None
 _supervisor_graph = None
+_AGENT_MODEL_ROLES = {
+    "supervisor": "supervisor",
+    "research_agent": "research",
+    "vision_agent": "vision",
+}
 
+
+def _model_spec_for_agent(agent: str) -> str:
+    role = _AGENT_MODEL_ROLES[agent]
+    return getattr(settings, f"model_{role}")
 
 def _get_vision_graph():
     global _vision_graph
@@ -1167,7 +1176,28 @@ def huy_luot_hoi(request_id: str = Form(..., description="Ma luot do trinh duyet
     if ma:
         _danh_dau_huy(ma)
     return {"cancelled": ma}
-
+@app.get("/api/agent-options")
+def get_agent_options():
+    """Tra danh sach agent va model dang duoc cau hinh cho giao dien chon."""
+    return {
+        "options": [
+            {
+                "agent": "supervisor",
+                "label": "Supervisor",
+                "model": _model_spec_for_agent("supervisor"),
+            },
+            {
+                "agent": "research_agent",
+                "label": "Research Agent",
+                "model": _model_spec_for_agent("research_agent"),
+            },
+            {
+                "agent": "vision_agent",
+                "label": "Vision Agent",
+                "model": _model_spec_for_agent("vision_agent"),
+            },
+        ]
+    }
 
 @app.post("/api/ask")
 def ask_supervisor(
@@ -1176,6 +1206,8 @@ def ask_supervisor(
     conversation_id: str = Form("", description="De trong = mo hoi thoai moi"),
     project_id: str = Form("", description="Chi dung khi mo hoi thoai moi: tao luon trong project nay"),
     research_mode: str = Form("", description="eco | standard | full - de trong = theo RESEARCH_MODE cua server. Chi co tac dung khi RESEARCH_ARCH=topics"),
+    agent: str = Form("supervisor", description="supervisor, research_agent, hoac vision_agent"),
+    model: str = Form("", description="Model spec dang duoc cau hinh cho agent da chon"),
     file: UploadFile = File(
         None, description="Anh (tuy chon) - chi can khi cau hoi lien quan toi hinh anh"
     ),
@@ -1233,6 +1265,17 @@ def ask_supervisor(
             thoi_diem_video = [float(i) for i in range(len(khung_video))]
 
     try:
+        if agent not in _AGENT_MODEL_ROLES:
+            raise HTTPException(
+                status_code=422,
+                detail="Agent không hợp lệ. Chọn supervisor, research_agent hoặc vision_agent.",
+            )
+        selected_model = _model_spec_for_agent(agent)
+        if model and model != selected_model:
+            raise HTTPException(
+                status_code=422,
+                detail="Model không khớp với cấu hình hiện tại của agent đã chọn.",
+            )
         for f in tai_len:
             saved_paths.append(_save_upload(f))
         # Anh "chinh" cua luot: dung cho khung YOLO ve len anh (chi khi gui MOT anh).
@@ -1333,7 +1376,15 @@ def ask_supervisor(
                 f"IMG{so} (t={thoi_diem_video[j]:g}s)" for so, j in zip(anh_kf, chon)
             ) + " (frames of the video above, NOT separate photos)"
 
-        graph = _get_supervisor_graph()
+        if agent == "vision_agent" and saved_path is not None:
+            message = f"{question}\nImage: {saved_path}"
+
+        if agent == "research_agent":
+            graph = _get_research_graph()
+        elif agent == "vision_agent":
+            graph = _get_vision_graph()
+        else:
+            graph = _get_supervisor_graph()
         result = graph.invoke(
             {"messages": lich_su + [{"role": "user", "content": message}]},
             config=run_config,
@@ -1353,13 +1404,21 @@ def ask_supervisor(
         # Ket qua tool cua agent con (vd detect_and_count_objects) chi co trong tool_sink.
         for ten, noi_dung in tool_sink.items():
             tool_outputs.setdefault(ten, noi_dung)
-        agents_used, agent_answers = _extract_agent_trace(result)
+        if agent == "supervisor":
+            agents_used, agent_answers = _extract_agent_trace(result)
+        else:
+            agents_used, agent_answers = [agent], {}
         if not answer.strip():
             # Van rong: khong bao gio de UI hien "(khong co noi dung tra ve)". Agent con
             # da tra loi thi UI van hien phan cua tung agent ben duoi cau bao nay.
             answer = TRA_LOI_RONG
 
-        response: dict = {"answer": answer, "agents_used": agents_used}
+        response: dict = {
+         "answer": answer,
+         "agents_used": agents_used,
+         "selected_agent": agent,
+         "selected_model": selected_model,
+     }
         if "research_agent" in agents_used and settings.research_arch == "topics":
             # Che do THUC SU da dung cho luot nay (de UI hien, va de kiem chung nut chon).
             response["research_mode"] = che_do or settings.research_mode

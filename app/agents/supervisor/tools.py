@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import inspect
 import re
+import time
 from typing import Any, Optional, Tuple
 
-from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
 
@@ -17,32 +18,6 @@ from app.agents.vision_agent.tools import can_dem_vat_the, tra_loi_truc_tiep
 from app.agents.vision_agent.labels import dung_cau_hoi
 from app.agents.vision_agent.topics import chon_chu_de, dung_chu_de, khong_dau
 from app.core.contracts import tool_error
-
-_LOGGER = logging.getLogger(__name__)
-_RETRY_BACKOFF_SECONDS = 0.1
-_TRANSIENT_ERROR_NAMES = {
-    "ConnectError",
-    "ConnectTimeout",
-    "ConnectionError",
-    "ClientConnectionError",
-    "ClientConnectorError",
-    "DeadlineExceeded",
-    "MaxRetryError",
-    "NewConnectionError",
-    "NetworkError",
-    "PoolTimeout",
-    "ProtocolError",
-    "ReadError",
-    "ReadTimeout",
-    "RemoteProtocolError",
-    "ServerDisconnectedError",
-    "ServerTimeoutError",
-    "ServiceUnavailable",
-    "Timeout",
-    "TimeoutError",
-    "WriteError",
-    "WriteTimeout",
-}
 
 # Bí danh ảnh trong bộ nhớ hội thoại: "IMG3" (xem app/image_memory.py). Tầng web
 # liệt kê ảnh cho supervisor bằng mã này thay vì đường dẫn file dài, rồi đưa một
@@ -61,7 +36,7 @@ _vision_agent_instance = None
 _research_agent_theo_che_do: dict = {}
 
 
-def get_research_agent(mode: str | None = None):
+def get_research_agent(mode: Optional[str] = None):
     """Tái sử dụng instance của Research Agent.
 
     mode (eco/standard/full, từ nút chọn trên UI) chỉ có tác dụng khi RESEARCH_ARCH=topics;
@@ -98,7 +73,82 @@ def reset_sub_agent_instances():
     _research_agent_theo_che_do.clear()
 
 
-def _chay_agent_con(agent, query: str, config: Optional[dict] = None):
+# Lỗi TẠM THỜI (mạng chập chờn, nhà cung cấp quá tải): thử lại đúng MỘT lần. So theo TÊN lớp
+# để không phải import SDK của từng nhà cung cấp (google, openai, groq, httpx...).
+_TRANSIENT_ERROR_NAMES = frozenset({
+    "TimeoutError", "ConnectionError", "ConnectionResetError", "ConnectTimeout", "ReadTimeout",
+    "APITimeoutError", "APIConnectionError", "RateLimitError", "ResourceExhausted",
+    "ServiceUnavailable", "InternalServerError", "DeadlineExceeded",
+})
+_RETRY_BACKOFF_SECONDS = 0.1
+
+# Khoá nội bộ của LangGraph trong configurable (scratchpad, checkpoint của graph CHA). Đưa
+# chúng xuống graph con sẽ làm graph con tưởng mình là một node của graph cha -> bỏ đi.
+_KHOA_NOI_BO_PREFIX = ("__pregel_", "checkpoint_")
+_KHOA_CAU_HINH_TRUYEN = ("recursion_limit", "callbacks", "tags", "metadata", "max_concurrency")
+
+
+def _la_loi_tam_thoi(exc: BaseException) -> bool:
+    return any(lop.__name__ in _TRANSIENT_ERROR_NAMES for lop in type(exc).__mro__)
+
+
+def _config_cho_agent_con(config: Optional[dict]) -> Optional[dict]:
+    """Config của lượt supervisor -> config cho graph con.
+
+    Giữ recursion_limit, callbacks, metadata và configurable của NGƯỜI DÙNG (ngân sách,
+    tool_sink, image_resolver, research_mode...), bỏ khoá nội bộ của LangGraph.
+    """
+    if not config:
+        return None
+    con = {k: config[k] for k in _KHOA_CAU_HINH_TRUYEN if config.get(k) is not None}
+    configurable = config.get("configurable")
+    if isinstance(configurable, dict):
+        con["configurable"] = {
+            k: v for k, v in configurable.items() if not str(k).startswith(_KHOA_NOI_BO_PREFIX)
+        }
+    return con
+
+
+def _nhan_config(agent) -> bool:
+    """Agent có nhận tham số config không (graph thật: có; agent giả kiểu cũ: có thể không)."""
+    try:
+        tham_so = inspect.signature(agent.invoke).parameters
+    except (TypeError, ValueError):
+        return True
+    return "config" in tham_so or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in tham_so.values()
+    )
+
+
+def _invoke_agent(agent, state: dict, config: Optional[dict]):
+    if config is not None and _nhan_config(agent):
+        return agent.invoke(state, config=config)
+    return agent.invoke(state)
+
+
+def _loi_agent(code: str, agent_name: str, message: str) -> str:
+    return tool_error(code, f"agent={agent_name}: {message}")
+
+
+def _giu_ngan_sach(agent_name: str, config: Optional[dict]) -> Optional[str]:
+    """Xin một lượt gọi agent con từ CallBudget của lượt này. None = được phép."""
+    allowed, reason, agent_calls, total_calls = budget_from_config(config).reserve(agent_name)
+    if allowed:
+        return None
+    if reason == "agent":
+        return _loi_agent(
+            "CALL_BUDGET_AGENT_LIMIT", agent_name,
+            f"already called {agent_calls} times this turn. Do NOT call it again; "
+            "answer from the information you already have.",
+        )
+    return _loi_agent(
+        "CALL_BUDGET_TOTAL_LIMIT", agent_name,
+        f"the turn already used {total_calls} sub-agent calls. Do NOT call any agent "
+        "again; answer from the information you already have.",
+    )
+
+
+def _chay_agent_con(agent, query: str, config: Optional[dict] = None, agent_name: Optional[str] = None):
     """Chạy agent con, trả (câu trả lời cuối, artifact cho web UI).
 
     Đây là nơi DUY NHẤT supervisor chạm vào agent con, nên mọi lớp bảo vệ nằm ở đây:
@@ -111,13 +161,36 @@ def _chay_agent_con(agent, query: str, config: Optional[dict] = None):
     agent con (ảnh khoanh vùng của YOLO...), các agent chủ đề đã chạy, bằng chứng.
     Không có lớp này thì supervisor-as-tool "nuốt" hết, UI chỉ thấy câu trả lời trần.
     """
+    from langchain_core.messages import ToolMessage
+
     from app.core.pretty import message_text
 
-    result = agent.invoke({"messages": [("user", query)]})
+    ten = agent_name or getattr(agent, "name", None) or "sub_agent"
+    if not callable(getattr(agent, "invoke", None)):
+        return _loi_agent("SUB_AGENT_INVALID", ten, "object has no invoke() method."), {}
+
+    het_luot = _giu_ngan_sach(ten, config)
+    if het_luot:
+        return het_luot, {}
+
+    config_con = _config_cho_agent_con(config)
+    result = None
+    for lan in range(2):
+        try:
+            result = _invoke_agent(agent, {"messages": [("user", query)]}, config_con)
+            break
+        except Exception as exc:  # noqa: BLE001 - đổi mọi lỗi agent con thành chuỗi lỗi
+            if lan == 0 and _la_loi_tam_thoi(exc):
+                time.sleep(_RETRY_BACKOFF_SECONDS)
+                continue
+            return _loi_agent("SUB_AGENT_ERROR", ten, f"{type(exc).__name__}: {exc}"[:500]), {}
+
     chuyen_ket_qua_tool_con(result, config)
-    messages = result.get("messages", []) if isinstance(result, dict) else []
+    messages = result.get("messages") if isinstance(result, dict) else None
     if not messages:
-        return str(result), {}
+        return _loi_agent(
+            "SUB_AGENT_EMPTY_STATE", ten, "the agent returned no messages."
+        ), {}
     tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
     topics, bang_chung = [], []
     for m in tool_msgs:
@@ -139,7 +212,7 @@ def _chay_agent_con(agent, query: str, config: Optional[dict] = None):
     return message_text(messages[-1].content), artifact
 
 
-def so_bi_danh(query: str, image_path: str | None) -> int | None:
+def so_bi_danh(query: str, image_path: Optional[str]) -> Optional[int]:
     """Số thứ tự ảnh nếu supervisor gọi ảnh bằng bí danh (IMG3, "3", "#3"...)."""
     if image_path:
         khop = _BI_DANH_RE.search(image_path) or _CHI_SO_RE.match(image_path)
@@ -284,7 +357,7 @@ def so_sanh_nhieu_anh(query: str, ds_so: list, config: Optional[dict]):
     return tra_loi, {"compared_images": ds_so, "counts_per_image": so_dem or {}}
 
 
-def chon_chu_de_cho_anh(query: str, so_anh: int | None, config: dict | None) -> str | None:
+def chon_chu_de_cho_anh(query: str, so_anh: Optional[int], config: Optional[dict]) -> Optional[str]:
     """Chủ đề cho lượt nhìn ảnh này; None khi VISION_TOPICS tắt (hành vi như cũ)."""
     from app.core import config as app_config
 
@@ -297,7 +370,7 @@ def chon_chu_de_cho_anh(query: str, so_anh: int | None, config: dict | None) -> 
     return chon_chu_de(query, chu_de_anh)
 
 
-def chuyen_ket_qua_tool_con(result: Any, config: dict | None) -> None:
+def chuyen_ket_qua_tool_con(result: Any, config: Optional[dict]) -> None:
     """Đưa kết quả các tool BÊN TRONG agent con ra ngoài cho tầng web.
 
     Supervisor chỉ thấy câu trả lời cuối của `vision_agent_tool`; kết quả thô của
@@ -317,7 +390,7 @@ def chuyen_ket_qua_tool_con(result: Any, config: dict | None) -> None:
             kho[ten] = noi_dung if isinstance(noi_dung, str) else str(noi_dung)
 
 
-def thu_tra_loi_truc_tiep(query: str, image_path: str | None) -> str | None:
+def thu_tra_loi_truc_tiep(query: str, image_path: Optional[str]) -> Optional[str]:
     """Thử trả lời bằng MỘT lượt model nhìn ảnh. None = hãy đi đường agent cũ.
 
     Đi đường cũ khi: VISION_DIRECT tắt, câu hỏi cần đếm / phát hiện vật thể (phải
@@ -372,8 +445,8 @@ def thu_dem_bang_gemini(query: str, image_path: Optional[str], config: Optional[
 
 
 def giai_bi_danh_anh(
-    query: str, image_path: str | None, config: dict | None
-) -> tuple[str | None, str | None]:
+    query: str, image_path: Optional[str], config: Optional[dict]
+) -> Tuple[Optional[str], Optional[str]]:
     """Đổi bí danh ảnh (IMG3) thành đường dẫn file thật.
 
     Trả (image_path, lỗi). Không có hàm đổi trong config (CLI, khách vãng lai),
@@ -405,12 +478,12 @@ def research_tool(query: str, config: RunnableConfig = None):
     Input should be a clear, self-contained question.
     """
     mode = ((config or {}).get("configurable") or {}).get("research_mode")
-    return _chay_agent_con(get_research_agent(mode), query)
+    return _chay_agent_con(get_research_agent(mode), query, config, agent_name="research_agent")
 
 
 @tool("vision_agent_tool", response_format="content_and_artifact")
 def vision_tool(
-    query: str, image_path: str | None = None, config: RunnableConfig = None
+    query: str, image_path: Optional[str] = None, config: RunnableConfig = None
 ):
     """Useful for analyzing images, object detection/counting with YOLO, or visual description.
     Input should be a clear query describing what to analyze or detect.
@@ -445,15 +518,20 @@ def vision_tool(
 
     # Chủ đề ảnh: lời dặn riêng cho lượt nhìn ảnh (xem topics.py). Không có chủ đề
     # trong hồ sơ (khách vãng lai, ảnh cũ) thì chỉ dựa vào câu hỏi, rồi đến "chung".
-    with dung_chu_de(chon_chu_de_cho_anh(query, so_anh, config)):
+    # dung_cau_hoi: để detect_and_count_objects chỉ trả loại vật thể mà câu hỏi nhắm tới.
+    with dung_chu_de(chon_chu_de_cho_anh(query, so_anh, config)), dung_cau_hoi(query):
+        # Hướng 4: đếm vật ngoài 80 loại COCO bằng Gemini, một lượt.
+        dem_gemini = thu_dem_bang_gemini(query, image_path, config)
+        if dem_gemini is not None:
+            return dem_gemini, {}
         # Đường nhanh: một lượt model nhìn ảnh và trả lời luôn (xem VISION_DIRECT).
         nhanh = thu_tra_loi_truc_tiep(query, image_path)
         if nhanh is not None:
             return nhanh, {}
-        return _chay_agent_con(get_vision_agent(), full_query, config)
+        return _chay_agent_con(get_vision_agent(), full_query, config, agent_name="vision_agent")
 
 
-def make_sub_agent_tool(agent: Any, tool_name: str | None = None) -> BaseTool:
+def make_sub_agent_tool(agent: Any) -> BaseTool:
     """Bọc động một agent (LangGraph CompiledGraph hoặc object) thành một LangChain Tool hợp lệ.
     
     Phục vụ cho việc test contract cũ và hỗ trợ truyền `agents=[...]` vào build_supervisor.
@@ -462,19 +540,12 @@ def make_sub_agent_tool(agent: Any, tool_name: str | None = None) -> BaseTool:
         return agent
 
     agent_name = getattr(agent, "name", None) or getattr(agent, "__name__", "sub_agent")
-    registered_tool_name = tool_name or (
-        f"{agent_name}_tool" if not agent_name.endswith("_tool") else agent_name
-    )
+    tool_name = f"{agent_name}_tool" if not agent_name.endswith("_tool") else agent_name
 
     @tool(tool_name)
-    def dynamic_sub_agent_tool(query: str) -> str:
+    def dynamic_sub_agent_tool(query: str, config: RunnableConfig = None) -> str:
         """Forward query to the sub-agent and return the final response text."""
-        if hasattr(agent, "invoke"):
-            res = agent.invoke({"messages": [("user", query)]})
-            if isinstance(res, dict) and "messages" in res:
-                return res["messages"][-1].content
-            return str(res)
-        return f"Agent {agent_name} executed."
+        return _chay_agent_con(agent, query, config, agent_name=agent_name)[0]
 
     return dynamic_sub_agent_tool
 
